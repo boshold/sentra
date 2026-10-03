@@ -1,6 +1,9 @@
 import { once } from "node:events";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
+import { errorResponse } from "#src/ingest/cors.js";
+import { isIngestPath } from "#src/ingest/route.js";
+
 type FetchHandler = (request: Request) => Promise<Response>;
 
 /** Writes the error response; called only before anything was sent, with all headers cleared. */
@@ -36,6 +39,24 @@ function requestUrl(req: IncomingMessage): URL {
     }
   }
   return new URL(path, "http://localhost");
+}
+
+const ABSOLUTE_FORM = /^[a-z][a-z0-9+.-]*:\/\/[^/?#]*/i;
+
+/** First `.` / `..` segment of the raw request path (also `%2e`, `\` separators); URL parsing would drop it. */
+function rawDotSegment(req: IncomingMessage): string | null {
+  const [path = ""] = (req.url ?? "/").replace(ABSOLUTE_FORM, "").split(/[?#]/, 1);
+  const found = path.split(/[/\\]/).find((segment) => /^(?:\.|%2e){1,2}$/i.test(segment));
+  return found ?? null;
+}
+
+/** An ingest path with a dot segment would land in another scope after URL normalization. */
+function dotSegmentRejection(req: IncomingMessage): Response | null {
+  const segment = rawDotSegment(req);
+  if (segment === null || !isIngestPath(requestUrl(req).pathname)) {
+    return null;
+  }
+  return errorResponse(400, "invalid_scope", `invalid scope segment ${JSON.stringify(segment)}`);
 }
 
 function requestHeaders(req: IncomingMessage): Headers {
@@ -213,7 +234,7 @@ async function respond(
   context: { signal: AbortSignal; fail: ErrorWriter },
 ): Promise<Response | null> {
   try {
-    return await handle(toRequest(req, context.signal));
+    return dotSegmentRejection(req) ?? (await handle(toRequest(req, context.signal)));
   } catch (error) {
     context.fail(res, error);
     return null;

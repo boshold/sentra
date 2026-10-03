@@ -142,6 +142,20 @@ describe("createRouter", () => {
     expect(parseJson(result.body)).toEqual({ route: "ingest" });
   });
 
+  it("rejects raw dot segments in ingest paths with 400 invalid_scope", async () => {
+    const port = await serve({ ingest: await coreIngest() });
+    for (const path of ["/app/../web/api/1/envelope/", "/app/%2e%2e/api/1/envelope/"]) {
+      const result = await httpRequest(port, {
+        method: "POST",
+        path,
+        headers: { host: "localhost" },
+        body: "{}\n",
+      });
+      expect(result.status).toBe(400);
+      expect(parseJson(result.body)).toMatchObject({ error: { code: "invalid_scope" } });
+    }
+  });
+
   it("falls through to the core handler for disabled routes", async () => {
     const port = await serve({ ingest: await coreIngest(), api: null, stream: null, mcp: null });
     for (const path of ["/api/sentra/health", "/api/sentra/stream", "/mcp"]) {

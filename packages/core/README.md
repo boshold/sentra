@@ -68,7 +68,7 @@ const issues = await sentra.query.listIssues({
 });
 ```
 
-`mcpServer` stands for the host's own `McpServer`, from SDK v2 `@modelcontextprotocol/server` as shown or SDK v1 `@modelcontextprotocol/sdk/server/mcp.js`; connecting it to a transport is up to the host. On shutdown call `unsubscribe()` and `await sentra.close()`. A host with its own router can use `isIngestPath(pathname)` to decide which requests go to `sentra.handle`.
+`mcpServer` stands for the host's own `McpServer`, from SDK v2 `@modelcontextprotocol/server` as shown or SDK v1 `@modelcontextprotocol/sdk/server/mcp.js`; connecting it to a transport is up to the host. On shutdown call `unsubscribe()` and `await sentra.close()`. A host with its own router can use `isIngestPath(pathname)` to decide which requests go to `sentra.handle`. `toNodeListener` answers `400 invalid_scope` when the raw request path has a `.` or `..` segment (also `%2e`), because URL parsing would move the event to another scope; a host that builds the `Request` itself should do the same.
 
 `sentra.handle(request: Request): Promise<Response>` is bound and never rejects. It answers `POST` with `200 { id }` and `OPTIONS` with `204` plus CORS headers. Errors use the body `{ error: { code, message, details? } }` and repeat the message in `X-Sentry-Error`. It never answers `429`, because SDK v11 stops sending for 60 s after one.
 

@@ -119,6 +119,54 @@ describe("toNodeListener with sentra.handle", () => {
     });
   });
 
+  describe("raw dot segments", () => {
+    async function post(base: string, path: string): Promise<RawResponse> {
+      const { body } = loadEnvelopeFixture("node-error");
+      return rawRequest(base, { method: "POST", path }, (request) => {
+        request.end(body);
+      });
+    }
+
+    it.each([
+      ["/app/../web/api/1/envelope/", ".."],
+      ["/../api/1/envelope/", ".."],
+      ["/app/%2e%2e/api/1/envelope/", "%2e%2e"],
+      ["/app/%2E./web/api/1/envelope/", "%2E."],
+      ["/app/./web/api/1/envelope/", "."],
+      [String.raw`/app\..\web/api/1/envelope/`, ".."],
+      ["/app/../web/api/1/envelope/?sentry_key=x", ".."],
+    ])("rejects %s with 400 invalid_scope and stores nothing", async (path, segment) => {
+      const { sentra, base } = await sentraServer();
+      const response = await post(base, path);
+      expect(response.status).toBe(400);
+      expect(JSON.parse(response.chunks.join(""))).toEqual({
+        error: {
+          code: "invalid_scope",
+          message: `invalid scope segment ${JSON.stringify(segment)}`,
+        },
+      });
+      expect(response.headers["access-control-allow-origin"]).toBe("*");
+      const page = await sentra.query.listItems({ from: 0 });
+      expect(page.items).toEqual([]);
+    });
+
+    it("rejects absolute-form request targets with dot segments", async () => {
+      const { base } = await sentraServer();
+      const response = await post(base, `${base}/app/../web/api/1/envelope/`);
+      expect(response.status).toBe(400);
+    });
+
+    it("keeps 404 for non-ingest paths and accepts segments that only contain dots", async () => {
+      const { sentra, base } = await sentraServer();
+      const outside = await post(base, "/x/../nope");
+      expect(outside.status).toBe(404);
+      const dots = await post(base, "/app/.../web/api/1/envelope/");
+      expect(dots.status).toBe(200);
+      const page = await sentra.query.listItems({ project: "app", session: "...", from: 0 });
+      expect(page.items).toHaveLength(1);
+    });
+  });
+
   it("answers unknown paths with 404", async () => {
     const { base } = await sentraServer();
     const response = await fetch(`${base}/nope`);

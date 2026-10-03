@@ -1,5 +1,6 @@
 import { DEFAULT_MAX_ITEMS } from "#src/defaults.js";
 import { SentraConfigError } from "#src/errors.js";
+import { issueMetadataOf } from "#src/grouping/metadata.js";
 import { encodeCursor, encodeIssueCursor, parseIssueCursor } from "#src/query/cursor.js";
 import {
   matchesEnvelopeFilter,
@@ -110,6 +111,14 @@ function byScope(a: Scope, b: Scope): number {
 
 function byIdAsc(a: { id: string }, b: { id: string }): number {
   return -byIdDesc(a, b);
+}
+
+/** Receipt order: `receivedAt`, then item id. */
+function byReceiptAsc(
+  a: { receivedAt: string; id: string },
+  b: { receivedAt: string; id: string },
+): number {
+  return Date.parse(a.receivedAt) - Date.parse(b.receivedAt) || byIdAsc(a, b);
 }
 
 function pageById<T extends { id: string }>(sorted: T[], page: ResolvedPage): Page<T> {
@@ -568,9 +577,10 @@ class MemoryStorage implements StorageAdapter {
     const items = [...(this.#issueItems.get(issueId) ?? [])]
       .map((id) => this.#items.get(id))
       .filter((item): item is Item => item !== undefined)
-      .toSorted(byIdAsc);
+      .toSorted(byReceiptAsc);
     const last = items.at(-1);
-    if (issue === undefined || last === undefined) {
+    const metadata = last === undefined ? null : issueMetadataOf(last);
+    if (issue === undefined || last === undefined || metadata === null) {
       this.#dropEmptyIssues([issueId]);
       return;
     }
@@ -579,6 +589,7 @@ class MemoryStorage implements StorageAdapter {
     issue.firstSeenAt = new Date(Math.min(...seen)).toISOString();
     issue.lastSeenAt = new Date(Math.max(...seen)).toISOString();
     issue.lastItemId = last.id;
+    Object.assign(issue, metadata);
   }
 
   #boundFailedEnvelopes(): void {

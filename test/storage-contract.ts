@@ -1010,6 +1010,52 @@ function runStorageContract(
         });
       });
 
+      it("takes title, level, culprit and platform from the surviving latest event", async () => {
+        const exception = (value: string): EventData["exceptions"][number] => ({
+          type: "Error",
+          value,
+          module: null,
+          mechanism: null,
+          frames: [],
+        });
+        const earlier = await write(adapter, {
+          receivedAt: iso(T0),
+          items: [
+            {
+              issueId: issueId(1),
+              level: "error",
+              platform: "node",
+              data: { exceptions: [exception("earlier error")], culprit: "c1" },
+              issue: { title: "Error: earlier error", culprit: "c1" },
+            },
+          ],
+        });
+        await write(adapter, {
+          receivedAt: iso(T0 + HOUR),
+          items: [
+            {
+              issueId: issueId(1),
+              level: "fatal",
+              platform: "python",
+              data: { exceptions: [exception("latest fatal")], culprit: "c2" },
+              issue: { title: "Error: latest fatal", culprit: "c2" },
+            },
+          ],
+        });
+        await adapter.deleteItems({ level: ["fatal"] });
+        expect(await adapter.getIssue(issueId(1))).toMatchObject({
+          title: "Error: earlier error",
+          level: "error",
+          culprit: "c1",
+          platform: "node",
+          count: 1,
+          lastItemId: only(earlier.items).id,
+        });
+        expect(
+          await idsOf(adapter.listIssues({ level: ["fatal"] }, ALL).then((page) => page.items)),
+        ).toEqual([]);
+      });
+
       it("deletes all items with an empty filter but keeps failed envelopes and scopes", async () => {
         await write(adapter, { items: [{ issueId: issueId(1) }, {}] });
         const failed = await write(adapter, { parseError: "bad" });

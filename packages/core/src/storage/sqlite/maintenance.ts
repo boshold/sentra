@@ -1,7 +1,9 @@
 import { int, nullable, object, string } from "zod";
 
+import { issueMetadataOf } from "#src/grouping/metadata.js";
 import type { Connection } from "#src/storage/sqlite/connection.js";
 import { and, buildItemWhere, inList, where } from "#src/storage/sqlite/queries.js";
+import { rowToItem } from "#src/storage/sqlite/rows.js";
 import type { ResolvedItemFilter } from "#src/storage/types.js";
 import type { ItemKind } from "#src/types.js";
 
@@ -17,11 +19,15 @@ const issueStatsRowSchema = object({
 
 function recountIssue({ statements }: Connection, issueId: string): void {
   const stats = issueStatsRowSchema.parse(statements.issueStats.get(issueId));
+  const latestRow =
+    stats.last_item_id === null ? undefined : statements.selectItem.get(stats.last_item_id);
+  const metadata = latestRow === undefined ? null : issueMetadataOf(rowToItem(latestRow));
   if (
     stats.count === 0 ||
     stats.first_seen_at === null ||
     stats.last_seen_at === null ||
-    stats.last_item_id === null
+    stats.last_item_id === null ||
+    metadata === null
   ) {
     statements.deleteIssue.run(issueId);
     return;
@@ -31,6 +37,10 @@ function recountIssue({ statements }: Connection, issueId: string): void {
     stats.first_seen_at,
     stats.last_seen_at,
     stats.last_item_id,
+    metadata.title,
+    metadata.culprit,
+    metadata.level,
+    metadata.platform,
     issueId,
   );
 }

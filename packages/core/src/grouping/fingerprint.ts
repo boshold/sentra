@@ -152,5 +152,5 @@ function computeGrouping({ scope, kind, data, grouping }: GroupingRequest): Grou
   };
 }
 
-export { computeGrouping, defaultComponents, normalizeText, normPath };
+export { computeGrouping, defaultComponents, normalizeText, normPath, resolveTitle };
 export type { GroupingKind, GroupingRequest, GroupingResult };

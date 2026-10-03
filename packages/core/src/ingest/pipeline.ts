@@ -1,4 +1,5 @@
 import { computeGrouping } from "#src/grouping/fingerprint.js";
+import { defaultIssueLevel } from "#src/grouping/metadata.js";
 import type { IngestContext } from "#src/ingest/handler.js";
 import type { LiveBus } from "#src/live/bus.js";
 import { normalizeItems } from "#src/normalize/index.js";
@@ -7,7 +8,7 @@ import type { ResolvedOptions } from "#src/options.js";
 import type { ParsedEnvelope } from "#src/parse/envelope.js";
 import { LOOPBACK_HOSTS } from "#src/sourcemaps/hosts.js";
 import type { IngestBatch, StorageAdapter } from "#src/storage/types.js";
-import type { Envelope, Level, SentraLogger } from "#src/types.js";
+import type { Envelope, SentraLogger } from "#src/types.js";
 import { uuidv7 } from "#src/util/uuidv7.js";
 
 /** Phase 4 hook between normalization and grouping; default returns its input. */
@@ -45,10 +46,6 @@ function withoutBody(envelope: Envelope): Omit<Envelope, "body"> {
   };
 }
 
-function defaultLevel(kind: "error" | "message"): Level {
-  return kind === "error" ? "error" : "info";
-}
-
 /** Sets issueId / fingerprint / culprit on error and message records; returns one issue entry each. */
 function groupItems(items: NewItem[], receivedAt: string): IssueEntry[] {
   const issues: IssueEntry[] = [];
@@ -74,7 +71,7 @@ function groupItems(items: NewItem[], receivedAt: string): IssueEntry[] {
       fingerprintHash: result.fingerprintHash,
       title: result.title,
       culprit: result.culprit,
-      level: item.level ?? defaultLevel(item.kind),
+      level: item.level ?? defaultIssueLevel(item.kind),
       platform: item.platform,
       itemId: item.id,
       seenAt: receivedAt,

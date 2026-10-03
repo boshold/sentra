@@ -46,12 +46,15 @@ export function createStatements(driver: SqliteDriver) {
     ),
     issueStats: driver.prepare(
       `SELECT COUNT(*) AS count, MIN(received_at) AS first_seen_at, MAX(received_at) AS last_seen_at,
-         MAX(id) AS last_item_id
+         (SELECT id FROM items l WHERE l.issue_id = items.issue_id
+          ORDER BY l.received_at DESC, l.id DESC LIMIT 1) AS last_item_id
        FROM items WHERE issue_id = ?`,
     ),
     deleteIssue: driver.prepare("DELETE FROM issues WHERE id = ?"),
     updateIssueStats: driver.prepare(
-      "UPDATE issues SET count = ?, first_seen_at = ?, last_seen_at = ?, last_item_id = ? WHERE id = ?",
+      `UPDATE issues SET count = ?, first_seen_at = ?, last_seen_at = ?, last_item_id = ?,
+         title = ?, culprit = ?, level = ?, platform = ?
+       WHERE id = ?`,
     ),
     idleSessions: driver.prepare(
       "SELECT project, session FROM scopes GROUP BY project, session HAVING MAX(last_seen_at) < ?",

@@ -1,3 +1,10 @@
+export {
+  DEFAULT_MAX_ATTACHMENT_BYTES,
+  DEFAULT_MAX_ENVELOPE_BYTES,
+  DEFAULT_MAX_IDLE,
+  DEFAULT_MAX_ITEMS,
+  DEFAULT_NOISE_MAX_AGE,
+} from "#src/defaults.js";
 export { buildDsn, parseDsnScope } from "#src/dsn.js";
 export {
   SentraConfigError,

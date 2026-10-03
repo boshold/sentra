@@ -1,17 +1,36 @@
 import { realpathSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
-import { VERSION, buildDsn } from "@bosdev/sentra-core";
+import {
+  DEFAULT_MAX_ATTACHMENT_BYTES,
+  DEFAULT_MAX_ENVELOPE_BYTES,
+  DEFAULT_MAX_IDLE,
+  DEFAULT_MAX_ITEMS,
+  DEFAULT_NOISE_MAX_AGE,
+  VERSION,
+  buildDsn,
+} from "@bosdev/sentra-core";
 import { cli, command } from "cleye";
-import type { Flags } from "cleye";
+import type { Flags, Renderers } from "cleye";
 
-import { CliUsageError, dsnSchema, resolveStartConfig, usageError } from "#src/config.js";
+import {
+  CliUsageError,
+  DEFAULT_PORT,
+  dsnSchema,
+  formatSize,
+  resolveStartConfig,
+  usageError,
+} from "#src/config.js";
 import type { StartConfig } from "#src/config.js";
 import { start } from "#src/server.js";
 
 const startFlags = {
   host: { type: String, description: "Bind address (default 127.0.0.1)" },
-  port: { type: Number, alias: "p", description: "Port, 0 = random free port (default 8969)" },
+  port: {
+    type: Number,
+    alias: "p",
+    description: `Port, 0 = random free port (default ${DEFAULT_PORT})`,
+  },
   publicUrl: {
     type: String,
     description: "Base URL for printed DSNs (default http://localhost:<port>)",
@@ -19,17 +38,26 @@ const startFlags = {
   storage: { type: String, description: "memory | sqlite (default sqlite)" },
   db: { type: String, description: "SQLite file (default $XDG_DATA_HOME/sentra/sentra.db)" },
   sqliteDriver: { type: String, description: "auto | better-sqlite3 | node (default auto)" },
-  maxItems: { type: Number, description: "Memory storage record cap (default 10000)" },
+  maxItems: {
+    type: Number,
+    description: `Memory storage record cap (default ${DEFAULT_MAX_ITEMS})`,
+  },
   retention: {
     type: String,
-    description: "Session idle time before deletion, or never (default 30d)",
+    description: `Session idle time before deletion, or never (default ${DEFAULT_MAX_IDLE})`,
   },
   noiseRetention: {
     type: String,
-    description: "Max age of span/transaction/log/other records, or never (default 7d)",
+    description: `Max age of span/transaction/log/other records, or never (default ${DEFAULT_NOISE_MAX_AGE})`,
   },
-  maxBody: { type: String, description: "Max envelope size (default 20mb)" },
-  maxAttachment: { type: String, description: "Max stored attachment size (default 10mb)" },
+  maxBody: {
+    type: String,
+    description: `Max envelope size (default ${formatSize(DEFAULT_MAX_ENVELOPE_BYTES)})`,
+  },
+  maxAttachment: {
+    type: String,
+    description: `Max stored attachment size (default ${formatSize(DEFAULT_MAX_ATTACHMENT_BYTES)})`,
+  },
   noRaw: { type: Boolean, description: "Do not keep raw envelope bodies" },
   noSourceMaps: { type: Boolean, description: "Disable source mapping" },
   sourceMapHost: { type: [String], description: "Extra allowed host for HTTP source-map fetches" },
@@ -58,8 +86,16 @@ const dsnFlags = {
   project: { type: String, description: "Project segment" },
   session: { type: String, description: "Session segment" },
   service: { type: String, description: "Service segment" },
-  publicUrl: { type: String, description: "Base URL (default http://localhost:8969)" },
+  publicUrl: { type: String, description: `Base URL (default http://localhost:${DEFAULT_PORT})` },
 } satisfies Flags;
+
+/** Plain help when stdout is not a terminal; ansis already handles `NO_COLOR`. */
+function renderHelp(nodes: Parameters<Renderers["render"]>[0], renderers: Renderers): string {
+  if (!process.stdout.isTTY && process.env.FORCE_COLOR === undefined) {
+    renderers.bold = (text: string) => text.toLocaleUpperCase();
+  }
+  return renderers.render(nodes);
+}
 
 function runDsn(flags: unknown): number {
   const parsed = dsnSchema.safeParse(flags ?? {});
@@ -93,13 +129,18 @@ async function runCli(
         name: "sentra",
         version: VERSION,
         flags: startFlags,
+        help: { render: renderHelp },
         commands: [
           command({
             name: "start",
             flags: startFlags,
-            help: { description: "Start the server (default)" },
+            help: { description: "Start the server (default)", render: renderHelp },
           }),
-          command({ name: "dsn", flags: dsnFlags, help: { description: "Print a DSN" } }),
+          command({
+            name: "dsn",
+            flags: dsnFlags,
+            help: { description: "Print a DSN", render: renderHelp },
+          }),
         ],
       },
       undefined,

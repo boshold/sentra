@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
 import { literal, strictObject, string } from "zod";
@@ -98,7 +98,8 @@ class SqliteStorage implements StorageAdapter {
     if (this.#path !== MEMORY_PATH) {
       const dir = path.dirname(this.#path);
       try {
-        mkdirSync(dir, { recursive: true });
+        // Async: a sync recursive mkdir can spin on paths like /proc/x and block signal handlers.
+        await mkdir(dir, { recursive: true });
       } catch (error) {
         throw new SentraStorageError(
           "storage_unavailable",

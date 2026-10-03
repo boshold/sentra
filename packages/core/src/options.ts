@@ -3,6 +3,12 @@ import path from "node:path";
 import { array, boolean, custom, number, prettifyError, strictObject, string } from "zod";
 import type { output } from "zod";
 
+import {
+  DEFAULT_MAX_ATTACHMENT_BYTES,
+  DEFAULT_MAX_ENVELOPE_BYTES,
+  DEFAULT_MAX_IDLE,
+  DEFAULT_NOISE_MAX_AGE,
+} from "#src/defaults.js";
 import { buildDsn } from "#src/dsn.js";
 import { SentraConfigError } from "#src/errors.js";
 import { parseDuration } from "#src/query/duration.js";
@@ -89,8 +95,6 @@ const STORAGE_METHODS = [
   "close",
 ] as const;
 const LOGGER_METHODS = ["debug", "info", "warn", "error"] as const;
-
-const MIB = 1024 * 1024;
 
 function noop(): void {
   // Silent default logger.
@@ -181,8 +185,8 @@ function durationMs(value: string): number | null {
 type ParsedOptions = output<typeof optionsSchema>;
 
 function resolveRetention(retention: ParsedOptions["retention"]): ResolvedRetention {
-  const maxIdle = retention?.maxIdle ?? "30d";
-  const noiseMaxAge = retention?.noiseMaxAge ?? "7d";
+  const maxIdle = retention?.maxIdle ?? DEFAULT_MAX_IDLE;
+  const noiseMaxAge = retention?.noiseMaxAge ?? DEFAULT_NOISE_MAX_AGE;
   return {
     maxIdle,
     noiseMaxAge,
@@ -218,8 +222,8 @@ function resolveOptions(input: unknown): ResolvedOptions {
     publicUrl: options.publicUrl ?? null,
     retention: resolveRetention(options.retention),
     limits: {
-      maxEnvelopeBytes: options.limits?.maxEnvelopeBytes ?? 20 * MIB,
-      maxAttachmentBytes: options.limits?.maxAttachmentBytes ?? 10 * MIB,
+      maxEnvelopeBytes: options.limits?.maxEnvelopeBytes ?? DEFAULT_MAX_ENVELOPE_BYTES,
+      maxAttachmentBytes: options.limits?.maxAttachmentBytes ?? DEFAULT_MAX_ATTACHMENT_BYTES,
     },
     rawEnvelopes: options.rawEnvelopes ?? true,
     sourceMaps: resolveSourceMaps(options.sourceMaps),

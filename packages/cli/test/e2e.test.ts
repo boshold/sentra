@@ -303,6 +303,15 @@ describe.skipIf("Bun" in globalThis)("sentra CLI (built binary)", { timeout: 20_
       expect(second.stderr).toContain("already in use");
     });
 
+    it("prints plain help with core defaults when stdout is a pipe", async () => {
+      const help = await runCliOnce(["--help"], { COLORTERM: "truecolor", NO_COLOR: "" });
+      expect(help.code).toBe(0);
+      expect(help.stdout).not.toContain("\u001B[");
+      expect(help.stdout).toContain("USAGE:");
+      expect(help.stdout).toContain("(default 20mb)");
+      expect(help.stdout).toContain("(default 10000)");
+    });
+
     it("exits 2 on invalid flags", async () => {
       const port = await runCliOnce(["--port", "abc"]);
       expect(port.code).toBe(2);

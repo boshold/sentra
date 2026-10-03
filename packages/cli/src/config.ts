@@ -3,6 +3,11 @@ import path from "node:path";
 import { inspect } from "node:util";
 
 import {
+  DEFAULT_MAX_ATTACHMENT_BYTES,
+  DEFAULT_MAX_ENVELOPE_BYTES,
+  DEFAULT_MAX_IDLE,
+  DEFAULT_MAX_ITEMS,
+  DEFAULT_NOISE_MAX_AGE,
   ITEM_KINDS,
   buildDsn,
   isDuration,
@@ -154,11 +159,11 @@ const flagsSchema = object({
   storage: zodEnum(["memory", "sqlite"]).default("sqlite"),
   db: string().min(1).optional(),
   sqliteDriver: zodEnum(["auto", "better-sqlite3", "node"]).default("auto"),
-  maxItems: number().int().positive().default(10_000),
-  retention: durationOrNever.default("30d"),
-  noiseRetention: durationOrNever.default("7d"),
-  maxBody: sizeSchema.default(20 * 1024 * 1024),
-  maxAttachment: sizeSchema.default(10 * 1024 * 1024),
+  maxItems: number().int().positive().default(DEFAULT_MAX_ITEMS),
+  retention: durationOrNever.default(DEFAULT_MAX_IDLE),
+  noiseRetention: durationOrNever.default(DEFAULT_NOISE_MAX_AGE),
+  maxBody: sizeSchema.default(DEFAULT_MAX_ENVELOPE_BYTES),
+  maxAttachment: sizeSchema.default(DEFAULT_MAX_ATTACHMENT_BYTES),
   noRaw: boolean().default(false),
   noSourceMaps: boolean().default(false),
   sourceMapHost: array(hostEntrySchema).default([]),
@@ -183,6 +188,18 @@ const dsnSchema = object({
   service: segmentSchema.optional(),
   publicUrl: publicUrlSchema.default(`http://localhost:${DEFAULT_PORT}`),
 });
+
+const SIZE_UNITS = [
+  ["gb", 1024 ** 3],
+  ["mb", 1024 ** 2],
+  ["kb", 1024],
+] as const;
+
+/** Inverse of `parseSize` for help text: largest unit that divides evenly, e.g. `20mb`. */
+function formatSize(bytes: number): string {
+  const unit = SIZE_UNITS.find(([, size]) => bytes % size === 0);
+  return unit === undefined ? `${bytes}b` : `${bytes / unit[1]}${unit[0]}`;
+}
 
 function flagName(key: PropertyKey | undefined): string {
   return typeof key === "string"
@@ -346,7 +363,9 @@ export {
   CliUsageError,
   createStderrLogger,
   defaultDbPath,
+  DEFAULT_PORT,
   dsnSchema,
+  formatSize,
   isLoopbackHost,
   isUnspecifiedHost,
   lanAddresses,

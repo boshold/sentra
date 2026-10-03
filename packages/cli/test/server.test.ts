@@ -260,23 +260,67 @@ describe("live output wiring", () => {
 describe("start", () => {
   it("shuts down on SIGINT", async () => {
     const before = process.listenerCount("SIGINT");
-    const done = start(memoryConfig());
+    const exit = vi.fn<(code: number) => void>();
+    let started: RunningServer | null = null;
+    const done = start(memoryConfig(), {
+      exit,
+      startServer: async (config) => {
+        started = await startServer(config, captureIo());
+        return started;
+      },
+    });
     await vi.waitFor(() => {
-      expect(process.listenerCount("SIGINT")).toBe(before + 1);
+      expect(started).not.toBeNull();
     });
     process.emit("SIGINT");
     await done;
+    expect(exit).not.toHaveBeenCalled();
     expect(process.listenerCount("SIGINT")).toBe(before);
     expect(process.listenerCount("SIGTERM")).toBe(0);
   });
 
-  it("handles a signal that arrives during startup", async () => {
+  it("exits 0 on a signal that arrives during startup", async () => {
     const before = process.listenerCount("SIGTERM");
-    const done = start(memoryConfig({ quiet: true }));
+    const exit = vi.fn<(code: number) => void>();
+    const done = start(memoryConfig({ quiet: true }), { exit });
     // Registered synchronously, before the server listens.
     expect(process.listenerCount("SIGTERM")).toBe(before + 1);
     process.emit("SIGTERM");
     await done;
+    expect(exit).toHaveBeenCalledWith(0);
     expect(process.listenerCount("SIGTERM")).toBe(before);
+  });
+
+  it("does not wait for a startup that never finishes", async () => {
+    const before = process.listenerCount("SIGINT");
+    const exit = vi.fn<(code: number) => void>();
+    const done = start(memoryConfig({ quiet: true }), {
+      exit,
+      startServer: async () => new Promise<never>(() => undefined),
+    });
+    process.emit("SIGINT");
+    await done;
+    expect(exit).toHaveBeenCalledExactlyOnceWith(0);
+    expect(process.listenerCount("SIGINT")).toBe(before);
+  });
+
+  it("closes a server whose startup finishes after the signal", async () => {
+    const exit = vi.fn<(code: number) => void>();
+    const close = vi.fn(async () => undefined);
+    let finish: (server: RunningServer) => void = () => undefined;
+    const done = start(memoryConfig({ quiet: true }), {
+      exit,
+      startServer: async () =>
+        new Promise<RunningServer>((resolve) => {
+          finish = resolve;
+        }),
+    });
+    process.emit("SIGTERM");
+    await done;
+    const server = await startServer(memoryConfig({ quiet: true }), captureIo());
+    finish({ ...server, close: async () => close().then(async () => server.close()) });
+    await vi.waitFor(() => {
+      expect(close).toHaveBeenCalledTimes(1);
+    });
   });
 });

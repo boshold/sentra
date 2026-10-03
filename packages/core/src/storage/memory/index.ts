@@ -1,3 +1,4 @@
+import { DEFAULT_MAX_ITEMS } from "#src/defaults.js";
 import { SentraConfigError } from "#src/errors.js";
 import { encodeCursor, encodeIssueCursor, parseIssueCursor } from "#src/query/cursor.js";
 import {
@@ -40,7 +41,6 @@ interface RemovalResult {
   issues: Set<string>;
 }
 
-const DEFAULT_MAX_ITEMS = 10_000;
 const PREFERRED_EVENT_KINDS: ReadonlySet<ItemKind> = new Set(["error", "message", "transaction"]);
 const SHORT_ID_LENGTH = 8;
 const FIND_ISSUES_LIMIT = 2;

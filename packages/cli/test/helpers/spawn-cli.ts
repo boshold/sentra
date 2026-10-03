@@ -90,7 +90,15 @@ function childEnv(overrides: Record<string, string> = {}): NodeJS.ProcessEnv {
   };
   // FORCE_COLOR (set by test runners) beats NO_COLOR.
   delete env.FORCE_COLOR;
-  return { ...env, ...overrides };
+  for (const [key, value] of Object.entries(overrides)) {
+    // An empty override removes the variable.
+    if (value === "") {
+      Reflect.deleteProperty(env, key);
+    } else {
+      env[key] = value;
+    }
+  }
+  return env;
 }
 
 function launch(args: string[], env?: Record<string, string>): ChildProcess {

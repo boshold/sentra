@@ -230,14 +230,35 @@ async function startServer(
 
 const SIGNALS = ["SIGINT", "SIGTERM"] as const;
 
+function exitProcess(code: number): void {
+  process.exit(code);
+}
+
+/** Closes a server whose startup outlived the signal; startup errors no longer matter then. */
+async function closeWhenStarted(startup: Promise<RunningServer>): Promise<void> {
+  try {
+    const server = await startup;
+    await server.close();
+  } catch {
+    // Exiting anyway.
+  }
+}
+
+interface StartDeps {
+  startServer?: (config: StartConfig) => Promise<RunningServer>;
+  exit?: (code: number) => void;
+}
+
 /**
  * Starts the server and resolves after a clean shutdown on SIGINT/SIGTERM; a second signal exits 1.
- * Handlers are registered before startup, so a signal right after the banner still shuts down cleanly.
+ * A signal before startup finished exits 0 at once: startup may hang (e.g. mkdir on an unreachable path).
  */
-async function start(config: StartConfig): Promise<void> {
+async function start(config: StartConfig, deps: StartDeps = {}): Promise<void> {
   const waiters: (() => void)[] = [];
-  const signalled = new Promise<void>((resolve) => {
-    waiters.push(resolve);
+  const signalled = new Promise<null>((resolve) => {
+    waiters.push(() => {
+      resolve(null);
+    });
   });
   let stopping = false;
   function onSignal(): void {
@@ -253,7 +274,13 @@ async function start(config: StartConfig): Promise<void> {
     process.on(signal, onSignal);
   }
   try {
-    const running = await startServer(config);
+    const startup = (deps.startServer ?? startServer)(config);
+    const running = await Promise.race([startup, signalled]);
+    if (running === null) {
+      void closeWhenStarted(startup);
+      (deps.exit ?? exitProcess)(0);
+      return;
+    }
     await signalled;
     await running.close();
   } finally {
@@ -264,4 +291,4 @@ async function start(config: StartConfig): Promise<void> {
 }
 
 export { start, startServer };
-export type { RunningServer, ServerHooks, ServerIo };
+export type { RunningServer, ServerHooks, ServerIo, StartDeps };

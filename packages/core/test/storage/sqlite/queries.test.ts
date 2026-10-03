@@ -55,7 +55,7 @@ describe("buildItemWhere", () => {
     [{ eventId: "e" }, "event_id = ?", ["e"]],
     [{ issueId: "i" }, "issue_id = ?", ["i"]],
     [{ traceId: "t" }, "trace_id = ?", ["t"]],
-    [{ q: "x" }, String.raw`title LIKE '%' || ? || '%' ESCAPE '\'`, ["x"]],
+    [{ q: "x" }, "title LIKE '%' || ? || '%' ESCAPE ?", ["x", "\\"]],
   ])("maps %j", (filter, sql, params) => {
     expect(buildItemWhere(filter)).toEqual({ sql, params });
   });
@@ -72,7 +72,7 @@ describe("buildItemWhere", () => {
     const hostile = "x' OR 1=1 --";
     const built = buildItemWhere({ q: hostile, eventId: hostile, project: [hostile] });
     expect(built.sql).not.toContain("OR 1=1");
-    expect(built.params).toEqual([hostile, hostile, hostile]);
+    expect(built.params.filter((param) => param === hostile)).toHaveLength(3);
   });
 });
 
@@ -90,7 +90,7 @@ describe("buildIssueWhere", () => {
     [{ minLevel: "warning" as const }, "level IN (?, ?, ?)", ["warning", "error", "fatal"]],
     [{ from: 10 }, "last_seen_at >= ?", [10]],
     [{ to: 20 }, "last_seen_at <= ?", [20]],
-    [{ q: "50%" }, String.raw`title LIKE '%' || ? || '%' ESCAPE '\'`, [String.raw`50\%`]],
+    [{ q: "50%" }, "title LIKE '%' || ? || '%' ESCAPE ?", [String.raw`50\%`, "\\"]],
   ])("maps %j", (filter, sql, params) => {
     expect(buildIssueWhere(filter)).toEqual({ sql, params });
   });

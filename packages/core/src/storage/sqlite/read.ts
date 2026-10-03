@@ -4,6 +4,7 @@ import { encodeCursor, encodeIssueCursor, parseIssueCursor } from "#src/query/cu
 import type { Connection } from "#src/storage/sqlite/connection.js";
 import type { SqliteDriver, SqliteParam } from "#src/storage/sqlite/driver/types.js";
 import {
+  LIKE_ESCAPE,
   and,
   buildFailedEnvelopeWhere,
   buildIssueWhere,
@@ -152,8 +153,8 @@ function findIssues({ driver }: Connection, idPrefix: string, scope: ScopeFilter
   };
   const condition = and(
     {
-      sql: "id LIKE ? || '%' ESCAPE '\\' AND substr(id, 1, ?) = ?",
-      params: [escapeLike(idPrefix), idPrefix.length, idPrefix],
+      sql: "id LIKE ? || '%' ESCAPE ? AND substr(id, 1, ?) = ?",
+      params: [escapeLike(idPrefix), LIKE_ESCAPE, idPrefix.length, idPrefix],
     },
     inList("project", scopeFilter.project),
     inList("session", scopeFilter.session),

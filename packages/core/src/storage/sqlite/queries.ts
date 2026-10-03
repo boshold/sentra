@@ -28,8 +28,11 @@ function toList(value: OneOrMany<string> | undefined): string[] | undefined {
   return typeof value === "string" ? [value] : value;
 }
 
+/** Bound as `ESCAPE ?` so the SQL text holds no backslash. */
+const LIKE_ESCAPE = "\\";
+
 function escapeLike(value: string): string {
-  return value.replaceAll(/[\\%_]/g, (match) => `\\${match}`);
+  return value.replaceAll(/[\\%_]/g, (match) => `${LIKE_ESCAPE}${match}`);
 }
 
 /** Column names come from code only; an empty list adds no condition. */
@@ -81,7 +84,7 @@ function equals(column: string, value: string | undefined): SqlFragment {
 function titleContains(q: string | undefined): SqlFragment {
   return q === undefined
     ? EMPTY
-    : fragment(String.raw`title LIKE '%' || ? || '%' ESCAPE '\'`, [escapeLike(q)]);
+    : fragment("title LIKE '%' || ? || '%' ESCAPE ?", [escapeLike(q), LIKE_ESCAPE]);
 }
 
 function buildScopeWhere(filter: ScopeFilter): SqlFragment {
@@ -140,6 +143,7 @@ function buildFailedEnvelopeWhere(filter: ResolvedScopeTimeFilter): SqlFragment 
 }
 
 export {
+  LIKE_ESCAPE,
   and,
   buildFailedEnvelopeWhere,
   buildIssueWhere,

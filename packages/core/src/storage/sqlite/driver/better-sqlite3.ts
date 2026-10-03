@@ -18,23 +18,7 @@ function normalizeRow(row: unknown): unknown {
   return out;
 }
 
-async function openDatabase(path: string): Promise<BetterSqlite3.Database> {
-  let db: BetterSqlite3.Database | undefined = undefined;
-  try {
-    const { default: Database } = await import("better-sqlite3");
-    // `new Database` loads the native addon; a broken binding fails here.
-    db = new Database(path, { timeout: BUSY_TIMEOUT_MS });
-    db.prepare("SELECT 1").get();
-    return db;
-  } catch (error) {
-    db?.close();
-    throw error;
-  }
-}
-
-export async function openBetterSqlite3(path: string): Promise<SqliteDriver> {
-  const db = await openDatabase(path);
-
+function wrap(db: BetterSqlite3.Database): SqliteDriver {
   return {
     name: "better-sqlite3",
     exec(sql: string): void {
@@ -58,4 +42,30 @@ export async function openBetterSqlite3(path: string): Promise<SqliteDriver> {
       db.close();
     },
   };
+}
+
+type DatabaseConstructor = typeof BetterSqlite3;
+
+function openDatabase(Database: DatabaseConstructor, path: string): BetterSqlite3.Database {
+  const db = new Database(path, { timeout: BUSY_TIMEOUT_MS });
+  try {
+    db.prepare("SELECT 1").get();
+    return db;
+  } catch (error) {
+    db.close();
+    throw error;
+  }
+}
+
+/** `new Database` loads the native addon; probing `:memory:` separates a broken binding from a bad path. */
+export async function loadBetterSqlite3(): Promise<(path: string) => SqliteDriver> {
+  const { default: Database } = await import("better-sqlite3");
+  const probe = new Database(":memory:");
+  probe.close();
+  return (path) => wrap(openDatabase(Database, path));
+}
+
+export async function openBetterSqlite3(path: string): Promise<SqliteDriver> {
+  const open = await loadBetterSqlite3();
+  return open(path);
 }

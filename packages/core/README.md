@@ -101,7 +101,7 @@ Durations are `<number><ms|s|m|h|d|w>`, for example `"60m"` or `"30d"`. The defa
 ## Storage
 
 - `memoryStorage({ maxItems })`: in-process storage. `maxItems` defaults to `10_000`; the oldest records are evicted first.
-- `sqliteStorage({ path, driver })`: SQLite file; missing directories are created. `driver` is `"auto"` (default), `"better-sqlite3"` or `"node"`. On Node, `auto` tries `better-sqlite3` first and falls back to `node:sqlite` (Node `>=22.13`); on Bun it uses `node:sqlite` only (see below). On Node 22, `node:sqlite` prints an `ExperimentalWarning`; Sentra filters it. If no driver loads, `createSentra` throws `SentraStorageError` (`storage_unavailable`) listing each driver's error.
+- `sqliteStorage({ path, driver })`: SQLite file; missing directories are created. `driver` is `"auto"` (default), `"better-sqlite3"` or `"node"`. On Node, `auto` tries `better-sqlite3` first and falls back to `node:sqlite` (Node `>=22.13`); on Bun it uses `node:sqlite` only (see below). On Node 22, `node:sqlite` prints an `ExperimentalWarning`; Sentra filters it. If no driver loads, `createSentra` throws `SentraStorageError` (`storage_unavailable`) listing each driver's error. A driver that loads but cannot open the file (directory, no write permission) fails with `storage_unavailable` and `cannot open database file <path>: <reason>`, without trying the next driver.
 - Use one writer per database file: do not open the same file from two Sentra instances at the same time.
 - `sentra.info().storage` reports `{ type, driver, path }`, with `driver` set to `"better-sqlite3"` or `"node"` for SQLite.
 

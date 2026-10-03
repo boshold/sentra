@@ -61,21 +61,7 @@ function removeWarningFilter(): void {
   }
 }
 
-export async function suppressSqliteExperimentalWarning<T>(fn: () => Promise<T>): Promise<T> {
-  installWarningFilter();
-  try {
-    return await fn();
-  } finally {
-    removeWarningFilter();
-  }
-}
-
-export async function openNodeSqlite(path: string): Promise<SqliteDriver> {
-  const Database = needsWarningFilter()
-    ? await suppressSqliteExperimentalWarning(importDatabaseSync)
-    : await importDatabaseSync();
-  const db = new Database(path, { timeout: BUSY_TIMEOUT_MS });
-
+function wrap(db: DatabaseSync): SqliteDriver {
   return {
     name: "node",
     exec(sql: string): void {
@@ -99,4 +85,34 @@ export async function openNodeSqlite(path: string): Promise<SqliteDriver> {
       db.close();
     },
   };
+}
+
+export async function suppressSqliteExperimentalWarning<T>(fn: () => Promise<T>): Promise<T> {
+  installWarningFilter();
+  try {
+    return await fn();
+  } finally {
+    removeWarningFilter();
+  }
+}
+
+export async function loadNodeSqlite(): Promise<(path: string) => SqliteDriver> {
+  const Database = needsWarningFilter()
+    ? await suppressSqliteExperimentalWarning(importDatabaseSync)
+    : await importDatabaseSync();
+  return (path) => {
+    const db = new Database(path, { timeout: BUSY_TIMEOUT_MS });
+    try {
+      db.prepare("SELECT 1").get();
+      return wrap(db);
+    } catch (error) {
+      db.close();
+      throw error;
+    }
+  };
+}
+
+export async function openNodeSqlite(path: string): Promise<SqliteDriver> {
+  const open = await loadNodeSqlite();
+  return open(path);
 }

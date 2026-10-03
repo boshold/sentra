@@ -5,9 +5,10 @@ import path from "node:path";
 import { number, object } from "zod";
 
 import { SentraStorageError } from "#src/errors.js";
-import { openBetterSqlite3 } from "#src/storage/sqlite/driver/better-sqlite3.js";
+import { loadBetterSqlite3, openBetterSqlite3 } from "#src/storage/sqlite/driver/better-sqlite3.js";
 import { loadDriver } from "#src/storage/sqlite/driver/load.js";
 import {
+  loadNodeSqlite,
   openNodeSqlite,
   suppressSqliteExperimentalWarning,
 } from "#src/storage/sqlite/driver/node.js";
@@ -20,11 +21,11 @@ import { RUNTIME_SQLITE_DRIVERS } from "../../helpers/sqlite.js";
 vi.mock("#src/storage/sqlite/driver/better-sqlite3.js", async (importOriginal) => {
   const actual =
     await importOriginal<typeof import("#src/storage/sqlite/driver/better-sqlite3.js")>();
-  return { openBetterSqlite3: vi.fn(actual.openBetterSqlite3) };
+  return { ...actual, loadBetterSqlite3: vi.fn(actual.loadBetterSqlite3) };
 });
 vi.mock("#src/storage/sqlite/driver/node.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("#src/storage/sqlite/driver/node.js")>();
-  return { ...actual, openNodeSqlite: vi.fn(actual.openNodeSqlite) };
+  return { ...actual, loadNodeSqlite: vi.fn(actual.loadNodeSqlite) };
 });
 
 const OPENERS: Record<SqliteDriverName, (file: string) => Promise<SqliteDriver>> = {
@@ -198,8 +199,8 @@ describe("withWriteTransaction", () => {
 
 describe("loadDriver", () => {
   beforeEach(() => {
-    vi.mocked(openBetterSqlite3).mockClear();
-    vi.mocked(openNodeSqlite).mockClear();
+    vi.mocked(loadBetterSqlite3).mockClear();
+    vi.mocked(loadNodeSqlite).mockClear();
   });
 
   it.skipIf(!betterSqlite3Loads)("auto picks better-sqlite3 when it loads", async () => {
@@ -209,15 +210,15 @@ describe("loadDriver", () => {
   });
 
   it("auto falls back to node when better-sqlite3 fails", async () => {
-    vi.mocked(openBetterSqlite3).mockRejectedValueOnce(new Error("no binding"));
+    vi.mocked(loadBetterSqlite3).mockRejectedValueOnce(new Error("no binding"));
     const driver = await loadDriver("auto", ":memory:");
     expect(driver.name).toBe("node");
     driver.close();
   });
 
   it.each(["better-sqlite3", "node"] as const)("forced %s tries only that driver", async (name) => {
-    const own = name === "node" ? openNodeSqlite : openBetterSqlite3;
-    const other = name === "node" ? openBetterSqlite3 : openNodeSqlite;
+    const own = name === "node" ? loadNodeSqlite : loadBetterSqlite3;
+    const other = name === "node" ? loadBetterSqlite3 : loadNodeSqlite;
     vi.mocked(own).mockRejectedValueOnce(new Error("nope"));
     await expect(loadDriver(name, ":memory:")).rejects.toBeInstanceOf(SentraStorageError);
     expect(vi.mocked(own)).toHaveBeenCalledTimes(1);
@@ -240,29 +241,37 @@ describe("loadDriver", () => {
     });
 
     it("auto never tries better-sqlite3", async () => {
-      vi.mocked(openNodeSqlite).mockRejectedValueOnce(new Error("no node:sqlite"));
+      vi.mocked(loadNodeSqlite).mockRejectedValueOnce(new Error("no node:sqlite"));
       await expect(loadDriver("auto", ":memory:")).rejects.toMatchObject({
         details: [{ driver: "node:sqlite", message: "no node:sqlite" }],
       });
-      expect(vi.mocked(openBetterSqlite3)).not.toHaveBeenCalled();
+      expect(vi.mocked(loadBetterSqlite3)).not.toHaveBeenCalled();
     });
 
     it("forced better-sqlite3 is still tried", async () => {
-      vi.mocked(openBetterSqlite3).mockRejectedValueOnce(new Error("nope"));
+      vi.mocked(loadBetterSqlite3).mockRejectedValueOnce(new Error("nope"));
       await expect(loadDriver("better-sqlite3", ":memory:")).rejects.toBeInstanceOf(
         SentraStorageError,
       );
-      expect(vi.mocked(openBetterSqlite3)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(loadBetterSqlite3)).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it("does not fall back when the database file cannot be opened", async () => {
+    const result = loadDriver("auto", tempDir);
+    await expect(result).rejects.toBeInstanceOf(SentraStorageError);
+    await expect(result).rejects.toMatchObject({ code: "storage_unavailable" });
+    await expect(result).rejects.toThrow(`sqliteStorage: cannot open database file ${tempDir}: `);
+    expect(vi.mocked(loadNodeSqlite).mock.calls.length).toBe(loadable[0] === "node" ? 1 : 0);
   });
 
   it.skipIf(process.versions.bun !== undefined)(
     "rejects with storage_unavailable listing every failure",
     async () => {
-      vi.mocked(openBetterSqlite3).mockRejectedValueOnce(
+      vi.mocked(loadBetterSqlite3).mockRejectedValueOnce(
         new Error("Cannot find module 'better-sqlite3'\nRequire stack: ..."),
       );
-      vi.mocked(openNodeSqlite).mockRejectedValueOnce(
+      vi.mocked(loadNodeSqlite).mockRejectedValueOnce(
         new Error("No such built-in module: node:sqlite"),
       );
       const result = loadDriver("auto", ":memory:");

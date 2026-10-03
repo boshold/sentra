@@ -6,6 +6,7 @@ import type { output } from "zod";
 import { buildDsn } from "#src/dsn.js";
 import { SentraConfigError } from "#src/errors.js";
 import { parseDuration } from "#src/query/duration.js";
+import { parseAllowedHost } from "#src/sourcemaps/http-loader.js";
 import { memoryStorage } from "#src/storage/memory/index.js";
 import type { StorageAdapter } from "#src/storage/types.js";
 import type { Duration, SentraLogger } from "#src/types.js";
@@ -154,7 +155,12 @@ const optionsSchema = strictObject({
   rawEnvelopes: boolean().optional(),
   sourceMaps: strictObject({
     enabled: boolean().optional(),
-    allowedHosts: array(string().min(1)).optional(),
+    allowedHosts: array(
+      string().refine((value) => parseAllowedHost(value) !== null, {
+        message:
+          "allowedHosts entries must be host, host:port or IPv6 (no scheme, path or credentials)",
+      }),
+    ).optional(),
     sourceRoots: array(
       string().refine((value) => path.isAbsolute(value), {
         message: "sourceRoots must be absolute",

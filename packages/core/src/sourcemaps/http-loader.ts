@@ -24,15 +24,20 @@ const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const MAX_REDIRECTS = 3;
 const JAVASCRIPT_CONTENT_TYPE = /^(?:text|application)\/(?:x-)?(?:javascript|ecmascript)\b/i;
 
-/** Accepts `host`, `host:port`, `[v6]`, `[v6]:port` and bare IPv6; rejects anything URL-like. */
-function addHost(hosts: Set<string>, entry: string): void {
+/** Accepts `host`, `host:port`, `[v6]`, `[v6]:port` and bare IPv6; `null` for anything URL-like. */
+function parseAllowedHost(entry: string): string | null {
   const value = entry.trim();
   if (value === "" || /[/\\@?#\s]/.test(value)) {
-    return;
+    return null;
   }
   const isBareIpv6 = !value.startsWith("[") && value.split(":").length > 2;
   const hostname = URL.parse(`http://${isBareIpv6 ? `[${value}]` : value}`)?.hostname;
-  if (hostname === undefined || hostname === "") {
+  return hostname === undefined || hostname === "" ? null : hostname;
+}
+
+function addHost(hosts: Set<string>, entry: string): void {
+  const hostname = parseAllowedHost(entry);
+  if (hostname === null) {
     return;
   }
   hosts.add(hostname);
@@ -202,5 +207,11 @@ async function loadHttpSourceMap(url: URL, options: HttpLoaderOptions): Promise<
   return toLoaded(mapResult.text, mapResult.finalUrl.href);
 }
 
-export { DEFAULT_ALLOWED_HOSTS, isAllowedUrl, loadHttpSourceMap, normalizeAllowedHosts };
+export {
+  DEFAULT_ALLOWED_HOSTS,
+  isAllowedUrl,
+  loadHttpSourceMap,
+  normalizeAllowedHosts,
+  parseAllowedHost,
+};
 export type { HttpLoaderOptions };

@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { connect, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { PassThrough } from "node:stream";
 
 import { resolveStartConfig, runCli } from "#src/cli.js";
 import type { StartConfig } from "#src/cli.js";
@@ -15,6 +16,27 @@ import { httpRequest, parseJson } from "./http.js";
 
 const running: RunningServer[] = [];
 
+interface CapturedIo {
+  stdout: PassThrough;
+  stderr: PassThrough;
+  text: { stdout: string; stderr: string };
+}
+
+function captureIo(): CapturedIo {
+  const io = {
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
+    text: { stdout: "", stderr: "" },
+  };
+  io.stdout.on("data", (chunk: Buffer) => {
+    io.text.stdout += chunk.toString("utf8");
+  });
+  io.stderr.on("data", (chunk: Buffer) => {
+    io.text.stderr += chunk.toString("utf8");
+  });
+  return io;
+}
+
 afterEach(async () => {
   await Promise.all(running.splice(0).map(async (server) => server.close()));
 });
@@ -23,8 +45,11 @@ function memoryConfig(flags: Record<string, unknown> = {}): StartConfig {
   return resolveStartConfig({ storage: "memory", port: 0, ...flags }, {}, process.cwd());
 }
 
-async function startMemory(flags: Record<string, unknown> = {}): Promise<RunningServer> {
-  const server = await startServer(memoryConfig(flags));
+async function startMemory(
+  flags: Record<string, unknown> = {},
+  io: CapturedIo = captureIo(),
+): Promise<RunningServer> {
+  const server = await startServer(memoryConfig(flags), io);
   running.push(server);
   return server;
 }
@@ -142,6 +167,73 @@ describe("startServer", () => {
     await server.close();
     await closedSocket;
     expect(performance.now() - startedAt).toBeGreaterThanOrEqual(1900);
+  });
+});
+
+describe("live output wiring", () => {
+  async function postFixture(server: RunningServer, name: string): Promise<void> {
+    const result = await httpRequest(server.port, {
+      method: "POST",
+      path: "/my-app/3f9a1c/web/api/1/envelope/",
+      headers: { host: "localhost" },
+      body: loadEnvelopeFixture(name).body,
+    });
+    expect(result.status).toBe(200);
+  }
+
+  it("prints the banner and pretty lines to stdout by default", async () => {
+    const io = captureIo();
+    const server = await startMemory({ noColor: true }, io);
+    expect(io.text.stdout).toMatch(/^sentra .+ {2}listening on http:\/\/127\.0\.0\.1:\d+\n/);
+    await postFixture(server, "node-error");
+    await vi.waitFor(() => {
+      expect(io.text.stdout).toMatch(/ERROR my-app\/3f9a1c\/web {2}Error: boom/);
+    });
+    expect(io.text.stdout).toMatch(/issue [0-9a-f]{8} NEW · 1×/);
+    expect(io.text.stderr).toBe("");
+  });
+
+  it("writes the banner to stderr and no live output with --quiet", async () => {
+    const io = captureIo();
+    const server = await startMemory({ quiet: true }, io);
+    expect(io.text.stderr).toContain("listening on");
+    await postFixture(server, "node-error");
+    const items = await server.sentra.query.listItems({ from: 0 });
+    expect(items.items).toHaveLength(1);
+    expect(io.text.stdout).toBe("");
+  });
+
+  it("writes one NDJSON line per passing event with --format json", async () => {
+    const io = captureIo();
+    const server = await startMemory({ format: "json" }, io);
+    expect(io.text.stderr).toContain("listening on");
+    await postFixture(server, "node-transaction");
+    await postFixture(server, "node-error");
+    await postFixture(server, "node-logs");
+    await vi.waitFor(() => {
+      expect(io.text.stdout.trimEnd().split("\n")).toHaveLength(3);
+    });
+    const events = io.text.stdout
+      .trimEnd()
+      .split("\n")
+      .map((line) => parseJson(line));
+    expect(events).toEqual([
+      expect.objectContaining({
+        type: "item.created",
+        item: expect.objectContaining({ kind: "error" }),
+      }),
+      expect.objectContaining({ item: expect.objectContaining({ kind: "log" }) }),
+      expect.objectContaining({ item: expect.objectContaining({ kind: "log" }) }),
+    ]);
+  });
+
+  it("stops live output after close", async () => {
+    const io = captureIo();
+    const server = await startServer(memoryConfig({ format: "json" }), io);
+    const unsubscribed = vi.spyOn(server.sentra, "close");
+    await server.close();
+    expect(unsubscribed).toHaveBeenCalledTimes(1);
+    expect(io.text.stdout).toBe("");
   });
 });
 

@@ -51,4 +51,5 @@ export type * from "#src/storage/types.js";
 export type * from "#src/types.js";
 export { ITEM_KINDS, LEVELS } from "#src/types.js";
 export { parseSize } from "#src/util/size.js";
+export { firstLine, sanitizeText } from "#src/util/text.js";
 export { VERSION } from "#src/util/version.js";

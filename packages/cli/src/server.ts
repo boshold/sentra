@@ -1,17 +1,23 @@
 import { createServer } from "node:http";
 import type { Server } from "node:http";
+import { homedir } from "node:os";
 
 import { SentraConfigError, createSentra, toNodeListener } from "@bosdev/sentra-core";
 import type { Sentra, SentraLogger } from "@bosdev/sentra-core";
 
+import { renderBanner } from "#src/banner.js";
 import {
   CliRuntimeError,
   CliUsageError,
   createStderrLogger,
+  lanAddresses,
   toSentraOptions,
 } from "#src/config.js";
 import type { StartConfig } from "#src/config.js";
 import { createGuard } from "#src/guard.js";
+import { createLiveFilter } from "#src/printer/filter.js";
+import { formatLiveEventJson } from "#src/printer/json.js";
+import { formatLiveEvent } from "#src/printer/pretty.js";
 import { createRouter } from "#src/router.js";
 import type { NodeListener } from "#src/router.js";
 
@@ -107,6 +113,49 @@ function boundPort(server: Server): number {
   return address.port;
 }
 
+function printBanner(
+  config: StartConfig,
+  io: ServerIo,
+  sentra: Sentra,
+  address: { port: number; publicUrl: string },
+): void {
+  const info = sentra.info();
+  const lines = renderBanner({
+    version: info.version,
+    host: config.host,
+    port: address.port,
+    publicUrl: address.publicUrl,
+    storage: info.storage,
+    retention: info.retention,
+    maxItems: config.maxItems,
+    api: config.api,
+    mcp: config.mcp,
+    lanAddresses: lanAddresses(),
+    homeDir: homedir(),
+  });
+  // Stdout stays clean NDJSON with --format json.
+  const stream = config.quiet || config.format === "json" ? io.stderr : io.stdout;
+  stream.write(`${lines.join("\n")}\n`);
+}
+
+function subscribeLive(
+  config: StartConfig,
+  stdout: NodeJS.WritableStream,
+  sentra: Sentra,
+): () => void {
+  const passes = createLiveFilter(config);
+  return sentra.subscribe({}, (event) => {
+    if (!passes(event)) {
+      return;
+    }
+    const lines =
+      config.format === "json"
+        ? [formatLiveEventJson(event)]
+        : formatLiveEvent(event, { color: config.color, stream: stdout });
+    stdout.write(`${lines.join("\n")}\n`);
+  });
+}
+
 async function startServer(
   config: StartConfig,
   io: ServerIo = { stdout: process.stdout, stderr: process.stderr },
@@ -133,8 +182,12 @@ async function startServer(
     throw error;
   }
   const port = boundPort(server);
+  const publicUrl = config.publicUrl ?? `http://localhost:${port}`;
+  printBanner(config, io, sentra, { port, publicUrl });
+  const unsubscribe = config.quiet ? null : subscribeLive(config, io.stdout, sentra);
 
   async function shutdown(): Promise<void> {
+    unsubscribe?.();
     const stopped = new Promise<void>((resolve) => {
       server.close(() => {
         resolve();
@@ -159,7 +212,7 @@ async function startServer(
   return {
     url: `http://${urlHost(config.host)}:${port}`,
     port,
-    publicUrl: config.publicUrl ?? `http://localhost:${port}`,
+    publicUrl,
     sentra,
     close: async () => {
       closing ??= shutdown();

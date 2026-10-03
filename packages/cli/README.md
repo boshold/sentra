@@ -6,6 +6,15 @@ Built on [`@boshold/sentra-core`](https://github.com/boshold/sentra/tree/main/pa
 
 ## Install / run
 
+The packages are published to GitHub Packages, not npmjs. Point the `@boshold` scope at it once, with a GitHub token that has `read:packages`, in `~/.npmrc` or the project's `.npmrc`:
+
+```ini
+@boshold:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+```
+
+Then:
+
 ```bash
 pnpx @boshold/sentra-cli
 # or

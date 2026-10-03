@@ -13,6 +13,15 @@ Not included: the Sentry `/store/` endpoint, reprocessing, forwarding to Spotlig
 
 ## Quick start (CLI)
 
+The packages are published to GitHub Packages, not npmjs. Point the `@boshold` scope at it once, with a GitHub token that has `read:packages`, in `~/.npmrc` or the project's `.npmrc`:
+
+```ini
+@boshold:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+```
+
+Then run the CLI:
+
 ```bash
 pnpx @boshold/sentra-cli
 # or
@@ -242,6 +251,10 @@ pnpm check              # typecheck, lint, build, unit tests with coverage
 pnpm test               # unit tests
 pnpm test:integration   # real Sentry SDKs, Vite and Nitro against Sentra (run pnpm build first)
 ```
+
+## Releasing
+
+Run the Release workflow (Actions → Release) with a `bump` (`patch`, `minor`, `major`). It runs the full CI, writes the next version into both packages, tags `vX.Y.Z`, publishes both packages to GitHub Packages and creates the GitHub release. It uses the shared flow from [boshold/gh-actions](https://github.com/boshold/gh-actions#releasing). Do not push tags or edit versions by hand; `dry-run` tests the release without publishing.
 
 ## License
 

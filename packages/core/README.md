@@ -14,6 +14,15 @@ For a ready-made server with terminal output, HTTP API and MCP endpoint, use [`@
 
 ## Install
 
+The packages are published to GitHub Packages, not npmjs. Point the `@boshold` scope at it once, with a GitHub token that has `read:packages`, in `~/.npmrc` or the project's `.npmrc`:
+
+```ini
+@boshold:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+```
+
+Then:
+
 ```bash
 pnpm add @boshold/sentra-core
 # or

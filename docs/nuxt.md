@@ -1,6 +1,6 @@
 # Nuxt
 
-Draft of the README "Nuxt" section. Verified with Nuxt 4.5.2, `@sentry/nuxt` 11.4.0 and Vite 8.3.2 in `nuxt dev`, on Node 24.21 and Node 22.23 (including the SSR plugin below).
+How to send Nuxt dev errors to Sentra and what Sentra can map. Verified with Nuxt 4.5.2, `@sentry/nuxt` 11.4.0 and Vite 8.3.2 in `nuxt dev`, on Node 24.21 and Node 22.23 (including the SSR plugin below).
 
 ## Setup
 
@@ -33,7 +33,7 @@ export default defineNuxtConfig({
 import * as Sentry from "@sentry/nuxt";
 
 Sentry.init({
-  dsn: process.env.NUXT_PUBLIC_SENTRY_DSN,
+  dsn: process.env.SENTRY_DSN,
   enabled: true,
   tracesSampleRate: 0,
 });
@@ -51,15 +51,19 @@ Sentry.init({
 });
 ```
 
-Start the dev server with the Sentra DSN. Scope segments are `project/session/service`:
+Start the dev server with the Sentra DSN. The server SDK reads `SENTRY_DSN`; the browser gets the DSN through the public runtime config (`NUXT_PUBLIC_SENTRY_DSN`). Scope segments are `project/session/service`:
 
 ```bash
-NUXT_PUBLIC_SENTRY_DSN=http://sentra@127.0.0.1:8969/q12/s1/web/1 pnpm dev
+SENTRY_DSN=http://sentra@127.0.0.1:8969/my-app/3f9a1c/web/1 \
+NUXT_PUBLIC_SENTRY_DSN=http://sentra@127.0.0.1:8969/my-app/3f9a1c/web/1 \
+pnpm dev
 ```
 
-Keep `enabled: true`. With `enabled: false` the SDK never calls `Sentry.init` and nothing is sent.
+`sentra dsn --project my-app --session 3f9a1c --service web --public-url http://127.0.0.1:8969` prints this DSN.
 
-Sentra needs the app directory as a source root to map server frames. When embedding the core:
+Keep `enabled: true` in dev. With `enabled: false` the SDK never calls `Sentry.init` and nothing is sent.
+
+Sentra needs the app directory as a source root to map server frames. The CLI uses the directory it was started in; otherwise pass `--source-root /path/to/nuxt-app`. When embedding the core:
 
 ```ts
 import http from "node:http";

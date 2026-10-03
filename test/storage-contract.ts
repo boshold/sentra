@@ -379,14 +379,88 @@ function runStorageContract(
       });
 
       it("does not expose stored data to caller mutation", async () => {
-        const { items } = await write(adapter, { items: [{ data: { tags: { a: "1" } } }] });
-        const item = only(items);
-        const read = await adapter.getItem(item.id);
+        const { envelope, items } = await write(adapter, {
+          body: new Uint8Array([1, 2]),
+          items: [
+            { issueId: issueId(1), data: { tags: { a: "1" } } },
+            { kind: "attachment", itemType: "attachment", blob: new Uint8Array([5]) },
+          ],
+        });
+        const [item, attachment] = items;
+        const before = structuredClone({
+          item: await adapter.getItem(item?.id ?? ""),
+          issue: await adapter.getIssue(issueId(1)),
+          scopes: await adapter.listScopes({}),
+          issues: await adapter.listIssues({}, ALL),
+          items: await adapter.listItems({}, ALL),
+          envelope: await adapter.getEnvelope(envelope.id),
+          failed: await adapter.listFailedEnvelopes({}, ALL),
+        });
+
+        const read = await adapter.getItem(item?.id ?? "");
         if (read?.kind === "error") {
           read.data.tags.a = "changed";
           read.title = "changed";
         }
-        expect(await adapter.getItem(item.id)).toEqual(item);
+        for (const row of await adapter.listScopes({})) {
+          row.service = "changed";
+          row.itemCount = 99;
+          row.issueCount = 99;
+        }
+        const issuePage = await adapter.listIssues({}, ALL);
+        const found = await adapter.findIssues(issueId(1).slice(0, 4), {});
+        for (const issue of [await adapter.getIssue(issueId(1)), ...issuePage.items, ...found]) {
+          if (issue !== null) {
+            issue.count = 99;
+            issue.fingerprint.push("changed");
+            issue.services.push("changed");
+          }
+        }
+        const itemPage = await adapter.listItems({}, ALL);
+        for (const summary of itemPage.items) {
+          summary.title = "changed";
+          summary.scope.service = "changed";
+        }
+        const storedEnvelope = await adapter.getEnvelope(envelope.id);
+        if (storedEnvelope !== null) {
+          storedEnvelope.header.changed = true;
+          storedEnvelope.parseWarnings.push("changed");
+          storedEnvelope.body?.fill(0);
+        }
+        const blob = await adapter.getBlob(attachment?.id ?? "");
+        blob?.fill(0);
+
+        expect({
+          item: await adapter.getItem(item?.id ?? ""),
+          issue: await adapter.getIssue(issueId(1)),
+          scopes: await adapter.listScopes({}),
+          issues: await adapter.listIssues({}, ALL),
+          items: await adapter.listItems({}, ALL),
+          envelope: await adapter.getEnvelope(envelope.id),
+          failed: await adapter.listFailedEnvelopes({}, ALL),
+        }).toEqual(before);
+        expect(bytes(await adapter.getBlob(attachment?.id ?? ""))).toEqual([5]);
+      });
+
+      it("does not keep references to the written batch", async () => {
+        const batch = makeBatch({ body: new Uint8Array([1]), items: [{ issueId: issueId(1) }] });
+        await adapter.write(batch);
+        const [entry] = batch.items;
+        const expected = structuredClone(entry?.item);
+        if (entry !== undefined) {
+          entry.item.title = "changed";
+          entry.item.scope.service = "changed";
+        }
+        batch.envelope.header.changed = true;
+        batch.envelope.body?.fill(9);
+        batch.issues[0]?.fingerprint.push("changed");
+        await expect(adapter.getItem(entry?.item.id ?? "")).resolves.toEqual(expected);
+        const stored = await adapter.getEnvelope(batch.envelope.id);
+        expect(stored?.header).not.toHaveProperty("changed");
+        expect(bytes(stored?.body ?? null)).toEqual([1]);
+        await expect(adapter.getIssue(issueId(1))).resolves.toHaveProperty("fingerprint", [
+          issueId(1),
+        ]);
       });
 
       it("rejects a duplicate item ID and changes nothing", async () => {

@@ -173,49 +173,41 @@ class MemoryStorage implements StorageAdapter {
   public async write(
     batch: IngestBatch,
   ): Promise<{ issues: { id: string; isNew: boolean; count: number }[] }> {
-    try {
-      this.#validate(batch);
-      this.#storeEnvelope(batch);
-      const issues = batch.issues.map((entry) => this.#upsertIssue(entry));
-      this.#evict();
-      return Promise.resolve({ issues });
-    } catch (error) {
-      return Promise.reject(error);
-    }
+    this.#validate(batch);
+    this.#storeEnvelope(batch);
+    const issues = batch.issues.map((entry) => this.#upsertIssue(entry));
+    this.#evict();
+    return { issues };
   }
 
   public async listScopes(filter: ScopeFilter): Promise<ScopeSummary[]> {
     const rows = [...this.#scopes.values()]
       .filter((row) => matchesScope(row, filter))
       .toSorted(byScope)
-      .map((row): ScopeSummary => Object.assign(row, { issueCount: this.#issueCount(row) }));
-    return Promise.resolve(rows);
+      .map((row) => this.#toScopeSummary(row));
+    return rows;
   }
 
   public async listIssues(filter: ResolvedIssueFilter, page: ResolvedPage): Promise<Page<Issue>> {
-    try {
-      const after = page.cursor === null ? null : parseIssueCursor(page.cursor);
-      const sorted = this.#allIssues()
-        .filter((issue) => matchesIssueFilter(issue, filter))
-        .map((issue) => ({ issue, seen: Date.parse(issue.lastSeenAt) }))
-        .toSorted((a, b) => b.seen - a.seen || byIdDesc(a.issue, b.issue));
-      const remaining =
-        after === null
-          ? sorted
-          : sorted.filter(
-              ({ issue, seen }) =>
-                seen < after.lastSeenAt || (seen === after.lastSeenAt && issue.id < after.id),
-            );
-      const items = remaining.slice(0, page.limit).map(({ issue }) => issue);
-      const last = items.at(-1);
-      return Promise.resolve({
-        items,
-        nextCursor:
-          remaining.length > page.limit && last !== undefined ? encodeIssueCursor(last) : null,
-      });
-    } catch (error) {
-      return Promise.reject(error);
-    }
+    const after = page.cursor === null ? null : parseIssueCursor(page.cursor);
+    const sorted = this.#allIssues()
+      .filter((issue) => matchesIssueFilter(issue, filter))
+      .map((issue) => ({ issue, seen: Date.parse(issue.lastSeenAt) }))
+      .toSorted((a, b) => b.seen - a.seen || byIdDesc(a.issue, b.issue));
+    const remaining =
+      after === null
+        ? sorted
+        : sorted.filter(
+            ({ issue, seen }) =>
+              seen < after.lastSeenAt || (seen === after.lastSeenAt && issue.id < after.id),
+          );
+    const items = remaining.slice(0, page.limit).map(({ issue }) => issue);
+    const last = items.at(-1);
+    return {
+      items,
+      nextCursor:
+        remaining.length > page.limit && last !== undefined ? encodeIssueCursor(last) : null,
+    };
   }
 
   public async findIssues(idPrefix: string, scope: ScopeFilter): Promise<Issue[]> {
@@ -228,12 +220,12 @@ class MemoryStorage implements StorageAdapter {
       .filter((issue) => issue.id.startsWith(idPrefix) && matchesIssueFilter(issue, filter))
       .toSorted(byIdAsc)
       .slice(0, FIND_ISSUES_LIMIT);
-    return Promise.resolve(issues);
+    return issues;
   }
 
   public async getIssue(id: string): Promise<Issue | null> {
     const stored = this.#issues.get(id);
-    return Promise.resolve(stored === undefined ? null : this.#toIssue(stored));
+    return stored === undefined ? null : this.#toIssue(stored);
   }
 
   public async listItems(
@@ -244,15 +236,15 @@ class MemoryStorage implements StorageAdapter {
       .filter((item) => matchesItemFilter(item, filter))
       .toSorted(byIdDesc);
     const result = pageById(sorted, page);
-    return Promise.resolve({
+    return {
       items: result.items.map((item) => toSummary(item)),
       nextCursor: result.nextCursor,
-    });
+    };
   }
 
   public async getItem(id: string): Promise<Item | null> {
     const item = this.#items.get(id);
-    return Promise.resolve(item === undefined ? null : structuredClone(item));
+    return item === undefined ? null : structuredClone(item);
   }
 
   public async getItemByEventId(eventId: string): Promise<Item | null> {
@@ -261,23 +253,21 @@ class MemoryStorage implements StorageAdapter {
       .toSorted(byIdAsc);
     const item =
       candidates.find((candidate) => PREFERRED_EVENT_KINDS.has(candidate.kind)) ?? candidates[0];
-    return Promise.resolve(item === undefined ? null : structuredClone(item));
+    return item === undefined ? null : structuredClone(item);
   }
 
   public async getBlob(itemId: string): Promise<Uint8Array | null> {
     const blob = this.#blobs.get(itemId);
-    return Promise.resolve(blob === undefined ? null : new Uint8Array(blob));
+    return blob === undefined ? null : new Uint8Array(blob);
   }
 
   public async getEnvelope(id: string): Promise<Envelope | null> {
     const envelope = this.#envelopes.get(id);
     if (envelope === undefined) {
-      return Promise.resolve(null);
+      return null;
     }
     const copy = withoutBody(envelope);
-    return Promise.resolve(
-      envelope.body === undefined ? copy : { ...copy, body: new Uint8Array(envelope.body) },
-    );
+    return envelope.body === undefined ? copy : { ...copy, body: new Uint8Array(envelope.body) };
   }
 
   public async listFailedEnvelopes(
@@ -288,10 +278,10 @@ class MemoryStorage implements StorageAdapter {
       .filter((envelope) => envelope.parseError !== null && matchesEnvelopeFilter(envelope, filter))
       .toSorted(byIdDesc);
     const result = pageById(sorted, page);
-    return Promise.resolve({
+    return {
       items: result.items.map((envelope) => withoutBody(envelope)),
       nextCursor: result.nextCursor,
-    });
+    };
   }
 
   public async deleteItems(filter: ResolvedItemFilter): Promise<number> {
@@ -303,7 +293,7 @@ class MemoryStorage implements StorageAdapter {
     for (const issueId of removed.issues) {
       this.#recomputeIssue(issueId);
     }
-    return Promise.resolve(ids.length);
+    return ids.length;
   }
 
   public async pruneIdleSessions(
@@ -347,7 +337,7 @@ class MemoryStorage implements StorageAdapter {
         this.#issueItems.delete(id);
       }
     }
-    return Promise.resolve({ sessionsDeleted: idle.size, itemsDeleted: itemIds.length });
+    return { sessionsDeleted: idle.size, itemsDeleted: itemIds.length };
   }
 
   public async pruneOldItems(kinds: ItemKind[], cutoff: Date): Promise<{ itemsDeleted: number }> {
@@ -362,7 +352,7 @@ class MemoryStorage implements StorageAdapter {
       this.#envelopes,
       (envelope) => envelope.parseError !== null && Date.parse(envelope.receivedAt) < limit,
     );
-    return Promise.resolve({ itemsDeleted: ids.length });
+    return { itemsDeleted: ids.length };
   }
 
   /** Drops empty index entries. */
@@ -370,7 +360,6 @@ class MemoryStorage implements StorageAdapter {
     for (const index of [this.#envelopeItems, this.#issueItems]) {
       deleteWhere(index, (ids) => ids.size === 0);
     }
-    return Promise.resolve();
   }
 
   public async close(): Promise<void> {
@@ -382,7 +371,6 @@ class MemoryStorage implements StorageAdapter {
     this.#scopes.clear();
     this.#envelopeItems.clear();
     this.#issueItems.clear();
-    return Promise.resolve();
   }
 
   #validate(batch: IngestBatch): void {
@@ -495,6 +483,18 @@ class MemoryStorage implements StorageAdapter {
 
   #allIssues(): Issue[] {
     return [...this.#issues.values()].map((stored) => this.#toIssue(stored));
+  }
+
+  #toScopeSummary(row: ScopeRow): ScopeSummary {
+    return {
+      project: row.project,
+      session: row.session,
+      service: row.service,
+      firstSeenAt: row.firstSeenAt,
+      lastSeenAt: row.lastSeenAt,
+      itemCount: row.itemCount,
+      issueCount: this.#issueCount(row),
+    };
   }
 
   #issueCount(scope: Scope): number {

@@ -58,13 +58,20 @@ function newestMtime(dir: string): number {
 async function ensureBuilt(): Promise<void> {
   const entry = cliEntry();
   const sources = ["packages/core/src", "packages/cli/src"].map((dir) => path.join(REPO_ROOT, dir));
+  const files = ["scripts/build.ts", "packages/core/package.json", "packages/cli/package.json"].map(
+    (file) => path.join(REPO_ROOT, file),
+  );
   let builtAt = 0;
   try {
     builtAt = statSync(entry).mtimeMs;
   } catch {
     builtAt = 0;
   }
-  if (sources.every((dir) => newestMtime(dir) < builtAt)) {
+  const newest = Math.max(
+    ...sources.map((dir) => newestMtime(dir)),
+    ...files.map((file) => statSync(file).mtimeMs),
+  );
+  if (newest < builtAt) {
     return;
   }
   await promisify(execFile)("pnpm", ["build"], { cwd: REPO_ROOT });

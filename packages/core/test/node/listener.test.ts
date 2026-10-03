@@ -427,6 +427,17 @@ describe("toNodeListener with custom handlers", () => {
       expect(response.chunks.join("")).toBe("custom");
     });
 
+    it("destroys the response when onError itself throws", async () => {
+      const failing = vi.fn((): never => {
+        throw new Error("writer boom");
+      });
+      const base = await listen(async () => Promise.reject(new Error("secret")), {
+        onError: failing,
+      });
+      await expect(rawRequest(base, {})).rejects.toThrow(/socket hang up|ECONNRESET/);
+      expect(failing).toHaveBeenCalledOnce();
+    });
+
     it("is used when the request cannot be converted", async () => {
       const handle = vi.fn(async () => Promise.resolve(new Response("unreachable")));
       const base = await listen(handle, { onError });

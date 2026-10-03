@@ -135,7 +135,12 @@ function failWith(writeError: ErrorWriter): ErrorWriter {
     for (const name of res.getHeaderNames()) {
       res.removeHeader(name);
     }
-    writeError(res, error);
+    try {
+      writeError(res, error);
+    } catch {
+      // A failing error writer must not throw out of the listener.
+      res.destroy();
+    }
   };
 }
 

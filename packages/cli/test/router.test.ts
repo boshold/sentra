@@ -151,6 +151,18 @@ describe("createRouter", () => {
     }
   });
 
+  it("answers 404 for disabled routes before the Host / Origin guard", async () => {
+    const port = await serve({ ingest: await coreIngest(), api: null, stream: null, mcp: null });
+    for (const path of ["/api/sentra/health", "/api/sentra/stream", "/mcp"]) {
+      const result = await httpRequest(port, {
+        path,
+        headers: { host: "evil.example", origin: "https://evil.example" },
+      });
+      expect(result.status).toBe(404);
+      expect(parseJson(result.body)).toMatchObject({ error: { code: "not_found" } });
+    }
+  });
+
   it("maps throwing and rejecting handlers to 500", async () => {
     const errors: string[] = [];
     const port = await serve(

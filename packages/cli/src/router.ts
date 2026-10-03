@@ -53,20 +53,16 @@ function sendJsonRpcError(res: ServerResponse, status: number, message: string):
   sendJson(res, status, { jsonrpc: "2.0", error: { code: -32_000, message }, id: null });
 }
 
-type Target =
-  | { kind: "ingest" }
-  | { kind: "mcp"; handler: NodeListener | null }
-  | { kind: "api"; handler: NodeListener | null };
+type Target = { kind: "ingest" } | { kind: "mcp" | "api"; handler: NodeListener };
 
+/** Disabled routes fall through to ingest (404) without the guard. */
 function selectTarget(routes: Routes, pathname: string): Target {
   if (pathname === "/mcp") {
-    return { kind: "mcp", handler: routes.mcp };
+    return routes.mcp ? { kind: "mcp", handler: routes.mcp } : { kind: "ingest" };
   }
   if (pathname === API_PREFIX || pathname.startsWith(`${API_PREFIX}/`)) {
-    return {
-      kind: "api",
-      handler: pathname === `${API_PREFIX}/stream` ? routes.stream : routes.api,
-    };
+    const handler = pathname === `${API_PREFIX}/stream` ? routes.stream : routes.api;
+    return handler ? { kind: "api", handler } : { kind: "ingest" };
   }
   return { kind: "ingest" };
 }
@@ -133,7 +129,7 @@ function createRouter(
       }
       return;
     }
-    void dispatch(target.handler ?? routes.ingest, req, res);
+    void dispatch(target.handler, req, res);
   };
 }
 

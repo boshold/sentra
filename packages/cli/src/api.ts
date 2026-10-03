@@ -75,6 +75,12 @@ function splitList(values: string[]): string[] {
     .filter((value) => value !== "");
 }
 
+/** Core ignores these (`nonEmpty`, dash-stripped `eventId`); dropping them keeps `filter_required` honest. */
+function isEmptyScalar(key: string, value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed === "" || (key === "eventId" && trimmed.replaceAll("-", "") === "");
+}
+
 /** Query string → core filter + page input; unknown or repeated scalar params → `invalid_filter`. */
 function parseFilterParams(params: URLSearchParams, allowed: readonly string[]): ParsedParams {
   const keys = [...new Set(params.keys())];
@@ -96,6 +102,9 @@ function parseFilterParams(params: URLSearchParams, allowed: readonly string[]):
     const [value] = values;
     if (values.length > 1 || value === undefined) {
       throw invalidFilter(`query parameter ${key} must be given once`, { repeated: [key] });
+    }
+    if (key !== "limit" && isEmptyScalar(key, value)) {
+      continue;
     }
     if (key === "limit") {
       if (!DIGITS.test(value)) {
@@ -121,19 +130,15 @@ function contentDispositionName(filename: string): string {
 function sendBytes(
   res: ServerResponse,
   data: Uint8Array,
-  headers: { contentType: string; filename?: string },
+  headers: { contentType: string; filename: string },
 ): void {
   res.writeHead(200, {
     "content-type": headers.contentType,
     "content-length": String(data.byteLength),
     "x-content-type-options": "nosniff",
-    ...(headers.filename === undefined
-      ? {}
-      : {
-          "content-disposition": `attachment; filename="${contentDispositionName(headers.filename)}"`,
-          // Blobs come from arbitrary SDK payloads; never let them run as a page on this origin.
-          "content-security-policy": "sandbox",
-        }),
+    "content-disposition": `attachment; filename="${contentDispositionName(headers.filename)}"`,
+    // Bytes come from arbitrary SDK payloads; never let them run as a page on this origin.
+    "content-security-policy": "sandbox",
   });
   res.end(data);
 }
@@ -292,7 +297,10 @@ function createApiHandler(deps: { sentra: Sentra; logger: SentraLogger }): NodeL
               `raw envelope ${item.envelopeId} is not stored`,
             );
           }
-          sendBytes(res, raw, { contentType: "application/x-sentry-envelope" });
+          sendBytes(res, raw, {
+            contentType: "application/x-sentry-envelope",
+            filename: `${item.envelopeId}.envelope`,
+          });
         },
       },
     },

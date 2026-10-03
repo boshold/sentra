@@ -92,6 +92,7 @@ describe("query API", () => {
     expect(result.status).toBe(200);
     expect(result.headers["content-type"]).toBe("application/json; charset=utf-8");
     expect(result.headers["access-control-allow-origin"]).toBeUndefined();
+    expect(result.headers["x-content-type-options"]).toBe("nosniff");
     expect(parseJson(result.body)).toEqual({
       ok: true,
       version: server.sentra.info().version,
@@ -201,6 +202,9 @@ describe("query API", () => {
     const raw = await call(server, `/api/sentra/items/${id}/envelope`);
     expect(raw.status).toBe(200);
     expect(raw.headers["content-type"]).toBe("application/x-sentry-envelope");
+    expect(raw.headers["content-security-policy"]).toBe("sandbox");
+    expect(raw.headers["x-content-type-options"]).toBe("nosniff");
+    expect(raw.headers["content-disposition"]).toMatch(/^attachment; filename="[\w-]+\.envelope"$/);
     expect(raw.headers["content-length"]).toBe(String(raw.bytes.byteLength));
     expect(new Uint8Array(raw.bytes)).toEqual(loadEnvelopeFixture("node-error").body);
     expect(await statusOf(server, "/api/sentra/items/nope/envelope")).toBe(404);
@@ -310,15 +314,28 @@ describe("query API", () => {
       status: 400,
       body: { error: { code: "filter_required" } },
     });
-    expect(await json(server, "/api/sentra/items?project=", "DELETE")).toMatchObject({
-      status: 400,
-    });
+    for (const query of [
+      "project=",
+      "q=",
+      "q=%20",
+      "issueId=",
+      "traceId=",
+      "eventId=-",
+      "eventId=--",
+      "since=",
+      "kind=,",
+    ]) {
+      expect(await json(server, `/api/sentra/items?${query}`, "DELETE")).toMatchObject({
+        status: 400,
+        body: { error: { code: "filter_required" } },
+      });
+    }
     expect(await json(server, "/api/sentra/items?limit=5", "DELETE")).toMatchObject({
       status: 400,
       body: { error: { code: "invalid_filter" } },
     });
     const before = await json(server, "/api/sentra/items?from=0&project=my-app");
-    expect(list(field(before.body, "items")).length).toBeGreaterThanOrEqual(1);
+    expect(list(field(before.body, "items"))).toHaveLength(3);
     const deleted = await json(server, "/api/sentra/items?project=my-app", "DELETE");
     expect(deleted.status).toBe(200);
     expect(field(deleted.body, "itemsDeleted")).toBeGreaterThanOrEqual(1);

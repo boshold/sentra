@@ -31,6 +31,7 @@ function sendJson(
   res.writeHead(status, {
     "content-type": JSON_TYPE,
     "content-length": String(Buffer.byteLength(text)),
+    "x-content-type-options": "nosniff",
     ...headers,
   });
   res.end(text);

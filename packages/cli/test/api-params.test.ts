@@ -13,6 +13,7 @@ const ITEM = [
   "limit",
   "cursor",
   "minLevel",
+  "eventId",
 ];
 
 function parse(
@@ -47,6 +48,8 @@ describe("parseFilterParams", () => {
     ["from=-1", { filter: { from: "-1" }, page: {} }],
     ["limit=5&cursor=abc", { filter: {}, page: { limit: 5, cursor: "abc" } }],
     ["minLevel=warning", { filter: { minLevel: "warning" }, page: {} }],
+    ["q=&since=%20&eventId=-&cursor=", { filter: {}, page: {} }],
+    ["eventId=ab-cd", { filter: { eventId: "ab-cd" }, page: {} }],
   ])("%s", (query, expected) => {
     expect(parse(query)).toEqual(expected);
   });

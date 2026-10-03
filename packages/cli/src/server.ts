@@ -152,10 +152,10 @@ function subscribeLive(
         : formatLiveEvent(event, { color: config.color, stream: stdout });
     stdout.write(`${lines.join("\n")}\n`);
   });
+  // Stays registered after stop() so later errors on a broken pipe are not unhandled.
   function stop(): void {
     if (active) {
       active = false;
-      stdout.off("error", stop);
       unsubscribe();
     }
   }

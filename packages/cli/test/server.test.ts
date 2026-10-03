@@ -244,6 +244,7 @@ describe("live output wiring", () => {
     });
     await postFixture(server, "node-error");
     expect(writes).toBe(1);
+    expect(() => stdout.emit("error", new Error("write EPIPE again"))).not.toThrow();
   });
 
   it("stops live output after close", async () => {

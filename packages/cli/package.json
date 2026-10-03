@@ -39,6 +39,9 @@
     "cleye": "^2.7.0",
     "zod": "^4.4.3"
   },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "^2.2.0"
+  },
   "engines": {
     "node": ">=22.15"
   }

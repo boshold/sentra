@@ -16,11 +16,12 @@ import {
 } from "#src/config.js";
 import type { StartConfig } from "#src/config.js";
 import { createGuard } from "#src/guard.js";
+import { createMcpRoute } from "#src/mcp.js";
 import { createLiveFilter } from "#src/printer/filter.js";
 import { formatLiveEventJson } from "#src/printer/json.js";
 import { formatLiveEvent } from "#src/printer/pretty.js";
 import { createRouter } from "#src/router.js";
-import type { NodeListener } from "#src/router.js";
+import { createStreamHandler } from "#src/sse.js";
 
 interface ServerIo {
   stdout: NodeJS.WritableStream;
@@ -38,23 +39,7 @@ interface RunningServer {
   close(): Promise<void>;
 }
 
-/** Runs on close before connections are dropped, e.g. to end SSE responses. */
-type CloseHook = () => void;
-
 const DRAIN_TIMEOUT_MS = 2000;
-
-// Hooks for later route handlers; each returns `null` until implemented.
-function createStreamHandler(
-  _sentra: Sentra,
-  _config: StartConfig,
-  _onClose: (hook: CloseHook) => void,
-): NodeListener | null {
-  return null;
-}
-
-function createMcpRoute(_sentra: Sentra, _config: StartConfig): NodeListener | null {
-  return null;
-}
 
 function urlHost(host: string): string {
   return host.includes(":") ? `[${host}]` : host;
@@ -164,28 +149,39 @@ function subscribeLive(
   return stop;
 }
 
+interface ServerHooks {
+  /** SSE heartbeat; tests shorten it. */
+  heartbeatMs?: number;
+}
+
 async function startServer(
   config: StartConfig,
   io: ServerIo = { stdout: process.stdout, stderr: process.stderr },
+  hooks: ServerHooks = {},
 ): Promise<RunningServer> {
   const logger = createStderrLogger(config.logLevel, io.stderr);
   const sentra = await openSentra(config, logger);
-  const closeHooks: CloseHook[] = [];
   const guard = createGuard({ boundHost: config.host, allowedHosts: config.allowedHosts });
-  const routes = {
+  const handlers = {
     ingest: toNodeListener(async (request) => sentra.handle(request)),
     api: config.api ? createApiHandler({ sentra, logger }) : null,
-    stream: config.api
-      ? createStreamHandler(sentra, config, (hook) => {
-          closeHooks.push(hook);
-        })
-      : null,
-    mcp: config.mcp ? createMcpRoute(sentra, config) : null,
+  };
+  const stream = config.api
+    ? createStreamHandler({ sentra, heartbeatMs: hooks.heartbeatMs })
+    : null;
+  const mcp = config.mcp
+    ? createMcpRoute({ sentra, version: sentra.info().version, logger })
+    : null;
+  const routes = {
+    ...handlers,
+    stream: stream?.listener ?? null,
+    mcp: mcp?.listener ?? null,
   };
   const server = createServer(createRouter(routes, guard, { logger }));
   try {
     await listen(server, config);
   } catch (error) {
+    await mcp?.close();
     await sentra.close();
     throw error;
   }
@@ -201,8 +197,11 @@ async function startServer(
         resolve();
       });
     });
-    for (const hook of closeHooks.splice(0)) {
-      hook();
+    stream?.closeAll();
+    try {
+      await mcp?.close();
+    } catch (error) {
+      logger.warn(`mcp handler close failed: ${messageOf(error)}`);
     }
     server.closeIdleConnections();
     const timer = setTimeout(() => {
@@ -262,4 +261,4 @@ async function start(config: StartConfig): Promise<void> {
 }
 
 export { start, startServer };
-export type { CloseHook, RunningServer, ServerIo };
+export type { RunningServer, ServerHooks, ServerIo };

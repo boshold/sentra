@@ -58,6 +58,10 @@ const ITEM_KEYS = [
   "traceId",
   "q",
 ] as const;
+/** `LiveFilter` = `ItemFilter` without the time window. */
+const LIVE_KEYS: readonly string[] = ITEM_KEYS.filter(
+  (key) => !TIME_KEYS.some((time) => time === key),
+);
 const ISSUE_KEYS = [...SCOPE_KEYS, ...TIME_KEYS, "kind", "level", "minLevel", "q"] as const;
 
 function invalidFilter(message: string, details?: unknown): SentraValidationError {
@@ -388,5 +392,5 @@ function createApiHandler(deps: { sentra: Sentra; logger: SentraLogger }): NodeL
   };
 }
 
-export { createApiHandler, parseFilterParams };
+export { LIVE_KEYS, createApiHandler, parseFilterParams };
 export type { ParsedParams };

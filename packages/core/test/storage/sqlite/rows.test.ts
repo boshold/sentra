@@ -10,6 +10,7 @@ import {
   rowToItem,
   rowToItemSummary,
   rowToScopeSummary,
+  toMs,
 } from "#src/storage/sqlite/rows.js";
 import type { EventData, Frame, Item, ItemKind } from "#src/types.js";
 
@@ -128,6 +129,15 @@ describe("item rows", () => {
     expectTypeOf<Row<"log">>().toExtend<Data<"log">>();
     expectTypeOf<Row<"attachment">>().toExtend<Data<"attachment">>();
     expectTypeOf<Row<"other">>().toExtend<Data<"other">>();
+  });
+});
+
+describe("timestamps", () => {
+  it("rejects invalid ISO strings", () => {
+    expect(() => toMs("not a date")).toThrow(/invalid timestamp "not a date"/);
+    const item = sampleItem("log");
+    expect(() => itemToRow({ ...item, timestamp: "" })).toThrow(RangeError);
+    expect(toMs("2026-10-01T00:00:00.000Z")).toBe(Date.parse("2026-10-01T00:00:00.000Z"));
   });
 });
 

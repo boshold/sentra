@@ -42,7 +42,11 @@ function jsonColumn<T extends ZodType>(schema: T) {
 }
 
 function toMs(iso: string): number {
-  return Date.parse(iso);
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) {
+    throw new RangeError(`sqliteStorage: invalid timestamp ${JSON.stringify(iso)}`);
+  }
+  return ms;
 }
 
 const nullableString = nullable(string());
@@ -294,6 +298,10 @@ const ITEM_COLUMNS = [
   "data",
 ] as const;
 
+const ITEM_SUMMARY_COLUMNS = ITEM_COLUMNS.filter(
+  (column) => column !== "data" && column !== "level_rank",
+);
+
 const ENVELOPE_COLUMNS = [
   "id",
   "project",
@@ -475,6 +483,7 @@ export {
   envelopeRowSchema,
   envelopeToRow,
   ITEM_COLUMNS,
+  ITEM_SUMMARY_COLUMNS,
   issueRowSchema,
   itemRowSchema,
   itemSummaryRowSchema,

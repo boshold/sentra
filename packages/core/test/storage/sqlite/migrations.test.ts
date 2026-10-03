@@ -201,13 +201,18 @@ describe.each(drivers)("sqliteStorage with %s", (driverName) => {
     await storage.close();
   });
 
-  it("closes a driver whose init() is still in flight", async () => {
+  it("rejects an init() that is still in flight when close() is called", async () => {
     const storage = sqliteStorage({ path: ":memory:", driver: driverName });
     const pending = storage.init();
     await storage.close();
-    await pending;
+    await expect(pending).rejects.toMatchObject({
+      code: "storage_unavailable",
+      message: "sqliteStorage: closed during init()",
+    });
     expect(() => opened[0]?.prepare("SELECT 1").get()).toThrow();
     await expect(storage.listScopes({})).rejects.toMatchObject({ code: "storage_unavailable" });
+    expect(await storage.init()).toEqual({ driver: driverName, path: ":memory:" });
+    await storage.close();
   });
 
   it("lets two instances open the same fresh file", async () => {

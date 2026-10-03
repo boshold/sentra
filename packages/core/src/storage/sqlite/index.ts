@@ -4,11 +4,13 @@ import path from "node:path";
 import { int, literal, object, strictObject, string } from "zod";
 
 import { SentraConfigError, SentraStorageError } from "#src/errors.js";
+import { encodeCursor, encodeIssueCursor, parseIssueCursor } from "#src/query/cursor.js";
 import { loadDriver } from "#src/storage/sqlite/driver/load.js";
 import { withWriteTransaction } from "#src/storage/sqlite/driver/transaction.js";
 import type {
   SqliteDriver,
   SqliteDriverOption,
+  SqliteParam,
   SqliteStatement,
 } from "#src/storage/sqlite/driver/types.js";
 import {
@@ -17,10 +19,29 @@ import {
   runMigrations,
 } from "#src/storage/sqlite/migrations.js";
 import {
+  and,
+  buildFailedEnvelopeWhere,
+  buildIssueWhere,
+  buildItemWhere,
+  buildScopeWhere,
+  escapeLike,
+  inList,
+  issueServiceCondition,
+  toList,
+  where,
+} from "#src/storage/sqlite/queries.js";
+import type { SqlFragment } from "#src/storage/sqlite/queries.js";
+import {
   ENVELOPE_COLUMNS,
   ITEM_COLUMNS,
+  ITEM_SUMMARY_COLUMNS,
   envelopeToRow,
   itemToRow,
+  rowToEnvelope,
+  rowToIssue,
+  rowToItem,
+  rowToItemSummary,
+  rowToScopeSummary,
   toMs,
 } from "#src/storage/sqlite/rows.js";
 import { applyPragmas } from "#src/storage/sqlite/schema.js";
@@ -77,6 +98,14 @@ function createStatements(driver: SqliteDriver) {
          last_item_id = excluded.last_item_id, title = excluded.title, culprit = excluded.culprit,
          level = excluded.level, platform = excluded.platform`,
     ),
+    selectItem: driver.prepare("SELECT * FROM items WHERE id = ?"),
+    selectItemByEventId: driver.prepare(
+      `SELECT * FROM items WHERE event_id = ?
+       ORDER BY CASE WHEN kind IN ('error', 'message', 'transaction') THEN 0 ELSE 1 END, id
+       LIMIT 1`,
+    ),
+    selectIssue: driver.prepare("SELECT * FROM issues WHERE id = ?"),
+    selectIssueServices: driver.prepare("SELECT DISTINCT service FROM items WHERE issue_id = ?"),
   } satisfies Record<string, SqliteStatement>;
 }
 
@@ -137,6 +166,163 @@ function writeBatch(
   return { issues };
 }
 
+const ITEM_SUMMARY_SELECT = ITEM_SUMMARY_COLUMNS.join(", ");
+const ENVELOPE_META_SELECT = ENVELOPE_COLUMNS.filter((column) => column !== "body").join(", ");
+const FIND_ISSUES_LIMIT = 2;
+
+const serviceRowSchema = object({ service: string() });
+const issueServiceRowSchema = object({ issue_id: string(), service: string() });
+
+function all(driver: SqliteDriver, sql: string, params: SqliteParam[]): unknown[] {
+  return driver.prepare(sql).all(...params);
+}
+
+function pageOf<T extends { id: string }>(rows: T[], limit: number): Page<T> {
+  const items = rows.slice(0, limit);
+  const last = items.at(-1);
+  return {
+    items,
+    nextCursor: rows.length > limit && last !== undefined ? encodeCursor(last.id) : null,
+  };
+}
+
+function idBefore(cursor: string | null): SqlFragment {
+  return cursor === null ? { sql: "", params: [] } : { sql: "id < ?", params: [cursor] };
+}
+
+function servicesByIssue(driver: SqliteDriver, ids: string[]): Map<string, string[]> {
+  const result = new Map<string, string[]>();
+  if (ids.length === 0) {
+    return result;
+  }
+  const condition = inList("issue_id", ids);
+  for (const row of all(
+    driver,
+    `SELECT DISTINCT issue_id, service FROM items WHERE ${condition.sql}`,
+    condition.params,
+  )) {
+    const { issue_id: issueId, service } = issueServiceRowSchema.parse(row);
+    result.set(issueId, [...(result.get(issueId) ?? []), service]);
+  }
+  return result;
+}
+
+function toIssues(driver: SqliteDriver, rows: unknown[]): Issue[] {
+  const ids = rows.map((row) => object({ id: string() }).parse(row).id);
+  const services = servicesByIssue(driver, ids);
+  return rows.map((row, index) =>
+    rowToIssue(row, (services.get(ids[index] ?? "") ?? []).toSorted()),
+  );
+}
+
+function listScopes({ driver }: Connection, filter: ScopeFilter): ScopeSummary[] {
+  const condition = buildScopeWhere(filter);
+  return all(
+    driver,
+    `SELECT project, session, service, first_seen_at, last_seen_at, item_count,
+       (SELECT COUNT(DISTINCT issue_id) FROM items
+         WHERE items.project = scopes.project AND items.session = scopes.session
+           AND items.service = scopes.service AND issue_id IS NOT NULL) AS issue_count
+     FROM scopes ${where(condition)}
+     ORDER BY project, session, service`,
+    condition.params,
+  ).map(rowToScopeSummary);
+}
+
+function listIssues(
+  { driver }: Connection,
+  filter: ResolvedIssueFilter,
+  page: ResolvedPage,
+): Page<Issue> {
+  const after = page.cursor === null ? null : parseIssueCursor(page.cursor);
+  const condition = and(
+    buildIssueWhere(filter),
+    after === null
+      ? { sql: "", params: [] }
+      : {
+          sql: "(last_seen_at < ? OR (last_seen_at = ? AND id < ?))",
+          params: [after.lastSeenAt, after.lastSeenAt, after.id],
+        },
+  );
+  const rows = all(
+    driver,
+    `SELECT * FROM issues ${where(condition)} ORDER BY last_seen_at DESC, id DESC LIMIT ?`,
+    [...condition.params, page.limit + 1],
+  );
+  const items = toIssues(driver, rows.slice(0, page.limit));
+  const last = items.at(-1);
+  return {
+    items,
+    nextCursor: rows.length > page.limit && last !== undefined ? encodeIssueCursor(last) : null,
+  };
+}
+
+function findIssues({ driver }: Connection, idPrefix: string, scope: ScopeFilter): Issue[] {
+  const scopeFilter = {
+    project: toList(scope.project) ?? [],
+    session: toList(scope.session) ?? [],
+    service: toList(scope.service) ?? [],
+  };
+  const condition = and(
+    {
+      sql: "id LIKE ? || '%' ESCAPE '\\' AND substr(id, 1, ?) = ?",
+      params: [escapeLike(idPrefix), idPrefix.length, idPrefix],
+    },
+    inList("project", scopeFilter.project),
+    inList("session", scopeFilter.session),
+    issueServiceCondition(scopeFilter),
+  );
+  const rows = all(driver, `SELECT * FROM issues ${where(condition)} ORDER BY id LIMIT ?`, [
+    ...condition.params,
+    FIND_ISSUES_LIMIT,
+  ]);
+  return toIssues(driver, rows);
+}
+
+function getIssue({ statements }: Connection, id: string): Issue | null {
+  const row = statements.selectIssue.get(id);
+  if (row === undefined) {
+    return null;
+  }
+  const services = statements.selectIssueServices
+    .all(id)
+    .map((entry) => serviceRowSchema.parse(entry).service)
+    .toSorted();
+  return rowToIssue(row, services);
+}
+
+function listItems(
+  { driver }: Connection,
+  filter: ResolvedItemFilter,
+  page: ResolvedPage,
+): Page<ItemSummary> {
+  const condition = and(buildItemWhere(filter), idBefore(page.cursor));
+  const rows = all(
+    driver,
+    `SELECT ${ITEM_SUMMARY_SELECT} FROM items ${where(condition)} ORDER BY id DESC LIMIT ?`,
+    [...condition.params, page.limit + 1],
+  ).map(rowToItemSummary);
+  return pageOf(rows, page.limit);
+}
+
+function listFailedEnvelopes(
+  { driver }: Connection,
+  filter: ResolvedScopeTimeFilter,
+  page: ResolvedPage,
+): Page<Omit<Envelope, "body">> {
+  const condition = and(
+    { sql: "parse_error IS NOT NULL", params: [] },
+    buildFailedEnvelopeWhere(filter),
+    idBefore(page.cursor),
+  );
+  const rows = all(
+    driver,
+    `SELECT ${ENVELOPE_META_SELECT} FROM envelopes ${where(condition)} ORDER BY id DESC LIMIT ?`,
+    [...condition.params, page.limit + 1],
+  ).map(rowToEnvelope);
+  return pageOf(rows, page.limit);
+}
+
 class SqliteStorage implements StorageAdapter {
   public readonly type = "sqlite";
 
@@ -144,6 +330,8 @@ class SqliteStorage implements StorageAdapter {
   readonly #driverOption: SqliteDriverOption;
   #connection: Connection | null = null;
   #initPromise: Promise<Connection> | null = null;
+  /** Bumped by `close()`; an `init()` started before that fails. */
+  #generation = 0;
 
   public constructor(file: string, driver: SqliteDriverOption) {
     this.#path = file === MEMORY_PATH ? file : path.resolve(file);
@@ -158,19 +346,26 @@ class SqliteStorage implements StorageAdapter {
 
   /** A failed attempt is forgotten so `init()` can be retried. */
   async #openOnce(): Promise<Connection> {
+    const generation = this.#generation;
     try {
-      return await this.#open();
+      return await this.#open(generation);
     } catch (error) {
-      this.#initPromise = null;
+      if (generation === this.#generation) {
+        this.#initPromise = null;
+      }
       throw error;
     }
   }
 
-  async #open(): Promise<Connection> {
+  async #open(generation: number): Promise<Connection> {
     if (this.#path !== MEMORY_PATH) {
       mkdirSync(path.dirname(this.#path), { recursive: true });
     }
     const driver = await loadDriver(this.#driverOption, this.#path);
+    if (generation !== this.#generation) {
+      driver.close();
+      throw new SentraStorageError("storage_unavailable", "sqliteStorage: closed during init()");
+    }
     try {
       // Checked before pragmas: `journal_mode=WAL` would rewrite the file header.
       assertSupportedVersion(readUserVersion(driver));
@@ -198,35 +393,37 @@ class SqliteStorage implements StorageAdapter {
     return withWriteTransaction(connection.driver, () => writeBatch(connection, batch));
   }
 
-  public async listScopes(_filter: ScopeFilter): Promise<ScopeSummary[]> {
-    throw this.#notImplemented("listScopes");
+  public async listScopes(filter: ScopeFilter): Promise<ScopeSummary[]> {
+    return listScopes(this.#db(), filter);
   }
 
-  public async listIssues(_filter: ResolvedIssueFilter, _page: ResolvedPage): Promise<Page<Issue>> {
-    throw this.#notImplemented("listIssues");
+  public async listIssues(filter: ResolvedIssueFilter, page: ResolvedPage): Promise<Page<Issue>> {
+    return listIssues(this.#db(), filter, page);
   }
 
-  public async findIssues(_idPrefix: string, _scope: ScopeFilter): Promise<Issue[]> {
-    throw this.#notImplemented("findIssues");
+  public async findIssues(idPrefix: string, scope: ScopeFilter): Promise<Issue[]> {
+    return findIssues(this.#db(), idPrefix, scope);
   }
 
-  public async getIssue(_id: string): Promise<Issue | null> {
-    throw this.#notImplemented("getIssue");
+  public async getIssue(id: string): Promise<Issue | null> {
+    return getIssue(this.#db(), id);
   }
 
   public async listItems(
-    _filter: ResolvedItemFilter,
-    _page: ResolvedPage,
+    filter: ResolvedItemFilter,
+    page: ResolvedPage,
   ): Promise<Page<ItemSummary>> {
-    throw this.#notImplemented("listItems");
+    return listItems(this.#db(), filter, page);
   }
 
-  public async getItem(_id: string): Promise<Item | null> {
-    throw this.#notImplemented("getItem");
+  public async getItem(id: string): Promise<Item | null> {
+    const row = this.#db().statements.selectItem.get(id);
+    return row === undefined ? null : rowToItem(row);
   }
 
-  public async getItemByEventId(_eventId: string): Promise<Item | null> {
-    throw this.#notImplemented("getItemByEventId");
+  public async getItemByEventId(eventId: string): Promise<Item | null> {
+    const row = this.#db().statements.selectItemByEventId.get(eventId);
+    return row === undefined ? null : rowToItem(row);
   }
 
   public async getBlob(_itemId: string): Promise<Uint8Array | null> {
@@ -238,10 +435,10 @@ class SqliteStorage implements StorageAdapter {
   }
 
   public async listFailedEnvelopes(
-    _filter: ResolvedScopeTimeFilter,
-    _page: ResolvedPage,
+    filter: ResolvedScopeTimeFilter,
+    page: ResolvedPage,
   ): Promise<Page<Omit<Envelope, "body">>> {
-    throw this.#notImplemented("listFailedEnvelopes");
+    return listFailedEnvelopes(this.#db(), filter, page);
   }
 
   public async deleteItems(_filter: ResolvedItemFilter): Promise<number> {
@@ -268,6 +465,7 @@ class SqliteStorage implements StorageAdapter {
   }
 
   public async close(): Promise<void> {
+    this.#generation += 1;
     const pending = this.#initPromise;
     this.#initPromise = null;
     if (pending) {

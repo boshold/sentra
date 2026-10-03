@@ -210,8 +210,10 @@ function transactionLines(data: TransactionData): string[] {
 interface TraceSpans {
   /** Usually already the longest spans of the trace. */
   spans: SpanItem[];
-  /** All spans of the trace; defaults to `spans.length`. */
+  /** Spans scanned; defaults to `spans.length`. */
   total: number;
+  /** The scan stopped before the end of the trace. */
+  truncated: boolean;
 }
 
 function spanLines(data: SpanData, trace: TraceSpans): string[] {
@@ -234,7 +236,11 @@ function spanLines(data: SpanData, trace: TraceSpans): string[] {
         ({ span }) =>
           `${formatDuration(span.data.durationMs)} ${singleLine(span.data.op ?? "-")} ${firstLine(span.data.name)} [${span.id}]`,
       ),
-      ...truncatedNote(longestSpans.length, trace.total, "spans"),
+      ...(trace.truncated
+        ? [
+            `(${longestSpans.length} longest of the newest ${trace.total} spans; the trace has more)`,
+          ]
+        : truncatedNote(longestSpans.length, trace.total, "spans")),
     ]),
   ];
 }
@@ -311,10 +317,14 @@ function kindLines(item: Item, trace: TraceSpans): string[] {
 
 function renderItemDetail(
   item: Item,
-  context: { traceSpans?: SpanItem[]; traceSpanTotal?: number } = {},
+  context: { traceSpans?: SpanItem[]; traceSpanTotal?: number; traceSpansTruncated?: boolean } = {},
 ): string {
   const spans = context.traceSpans ?? [];
-  const trace = { spans, total: context.traceSpanTotal ?? spans.length };
+  const trace = {
+    spans,
+    total: context.traceSpanTotal ?? spans.length,
+    truncated: context.traceSpansTruncated ?? false,
+  };
   return sanitizeText([...headerLines(item), ...kindLines(item, trace)].join("\n"));
 }
 

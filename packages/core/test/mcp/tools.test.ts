@@ -324,6 +324,15 @@ describe("sentra_get_item", () => {
       expect(text).toContain("(20 of 101 spans)");
     });
 
+    it("stops scanning after 10000 spans and says so", async () => {
+      const spans = traceOf(Array.from({ length: 10_001 }, (_, index) => (index === 0 ? 9 : 1)));
+      const { tools, listItems } = toolsFor(spans);
+      const text = textOf(await toolByName(tools, "sentra_get_item").handler({ id: "span-10000" }));
+      expect(listItems).toHaveBeenCalledTimes(20);
+      expect(text).not.toContain("[span-00000]");
+      expect(text).toContain("(20 longest of the newest 10000 spans; the trace has more)");
+    });
+
     it("pages through traces larger than one page", async () => {
       const durations = Array.from({ length: 1201 }, (_, index) => (index === 3 ? 500 : 1));
       const spans = traceOf(durations);

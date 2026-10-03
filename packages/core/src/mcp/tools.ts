@@ -29,6 +29,8 @@ const MAX_LIMIT = 100;
 /** Page size when scanning a trace; the storage maximum. */
 const TRACE_PAGE_SIZE = 500;
 const TRACE_SPANS_SHOWN = 20;
+/** Bounds the per-call work on huge traces. */
+const MAX_TRACE_SCAN = 10_000;
 const FULL_ISSUE_ID_LENGTH = 16;
 const TO_NOTE = "A date-only value (2026-10-03) means midnight at the start of that day.";
 
@@ -129,10 +131,12 @@ function createMcpTools(deps: McpToolDeps): SentraToolDefinition[] {
     return first.id;
   }
 
-  /** Pages through the whole trace, keeping only the longest spans and the true total. */
-  async function traceSpansOf(item: Item): Promise<{ spans: SpanItem[]; total: number }> {
+  /** Pages through the trace (newest first, up to `MAX_TRACE_SCAN`), keeping the longest spans. */
+  async function traceSpansOf(
+    item: Item,
+  ): Promise<{ spans: SpanItem[]; total: number; truncated: boolean }> {
     if (item.kind !== "span" || item.traceId === null) {
-      return { spans: [], total: 0 };
+      return { spans: [], total: 0, truncated: false };
     }
     let longest: SpanItem[] = [];
     let total = 0;
@@ -140,7 +144,7 @@ function createMcpTools(deps: McpToolDeps): SentraToolDefinition[] {
     do {
       const page = await query.listItems(
         { traceId: item.traceId, kind: "span" },
-        { limit: TRACE_PAGE_SIZE, cursor },
+        { limit: Math.min(TRACE_PAGE_SIZE, MAX_TRACE_SCAN - total), cursor },
       );
       const items = await Promise.all(page.items.map(async (summary) => query.getItem(summary.id)));
       const spans = items.filter((span): span is SpanItem => span?.kind === "span");
@@ -149,8 +153,8 @@ function createMcpTools(deps: McpToolDeps): SentraToolDefinition[] {
         .toSorted((a, b) => b.data.durationMs - a.data.durationMs)
         .slice(0, TRACE_SPANS_SHOWN);
       cursor = page.nextCursor ?? undefined;
-    } while (cursor !== undefined);
-    return { spans: longest, total };
+    } while (cursor !== undefined && total < MAX_TRACE_SCAN);
+    return { spans: longest, total, truncated: cursor !== undefined };
   }
 
   const listScopes = object({
@@ -276,7 +280,7 @@ function createMcpTools(deps: McpToolDeps): SentraToolDefinition[] {
       name: "sentra_get_item",
       title: "Get record",
       description:
-        'Show one record in full. Errors: exceptions with source-mapped frames and context, request, tags, last 20 breadcrumbs, source-map status. Transactions: top 20 spans. Spans: attributes and the 20 longest spans of the trace. Logs: body and attributes.\nExample: sentra_get_item({ id: "80696dce07b1410b8867fcbc1083a832" })',
+        'Show one record in full. Errors: exceptions with source-mapped frames and context, request, tags, last 20 breadcrumbs, source-map status. Transactions: top 20 spans. Spans: attributes and the 20 longest spans of the trace (newest 10000 scanned). Logs: body and attributes.\nExample: sentra_get_item({ id: "80696dce07b1410b8867fcbc1083a832" })',
       inputSchema: getItem,
       run: async ({ id }) => {
         const item = (await query.getItem(id)) ?? (await query.getItemByEventId(id));
@@ -285,7 +289,11 @@ function createMcpTools(deps: McpToolDeps): SentraToolDefinition[] {
         }
         const trace = await traceSpansOf(item);
         return textResult(
-          renderItemDetail(item, { traceSpans: trace.spans, traceSpanTotal: trace.total }),
+          renderItemDetail(item, {
+            traceSpans: trace.spans,
+            traceSpanTotal: trace.total,
+            traceSpansTruncated: trace.truncated,
+          }),
         );
       },
     }),

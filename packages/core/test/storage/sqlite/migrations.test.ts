@@ -184,6 +184,72 @@ describe.each(drivers)("sqliteStorage with %s", (driverName) => {
     }
   });
 
+  it("opens one driver for concurrent init() calls", async () => {
+    const storage = sqliteStorage({ path: path.join(tempDir, "once.db"), driver: driverName });
+    const [a, b] = await Promise.all([storage.init(), storage.init()]);
+    expect(a).toEqual(b);
+    expect(vi.mocked(loadDriver)).toHaveBeenCalledTimes(1);
+    await storage.close();
+    expect(() => opened[0]?.prepare("SELECT 1").get()).toThrow();
+  });
+
+  it("retries init() after a failure", async () => {
+    const storage = sqliteStorage({ path: ":memory:", driver: driverName });
+    vi.mocked(loadDriver).mockRejectedValueOnce(new Error("flaky"));
+    await expect(storage.init()).rejects.toThrow("flaky");
+    expect(await storage.init()).toEqual({ driver: driverName, path: ":memory:" });
+    await storage.close();
+  });
+
+  it("closes a driver whose init() is still in flight", async () => {
+    const storage = sqliteStorage({ path: ":memory:", driver: driverName });
+    const pending = storage.init();
+    await storage.close();
+    await pending;
+    expect(() => opened[0]?.prepare("SELECT 1").get()).toThrow();
+    await expect(storage.listScopes({})).rejects.toMatchObject({ code: "storage_unavailable" });
+  });
+
+  it("lets two instances open the same fresh file", async () => {
+    const file = path.join(tempDir, "shared.db");
+    const first = sqliteStorage({ path: file, driver: driverName });
+    const second = sqliteStorage({ path: file, driver: driverName });
+    await Promise.all([first.init(), second.init()]);
+    for (const driver of opened) {
+      expect(readUserVersion(driver)).toBe(1);
+    }
+    await Promise.all([first.close(), second.close()]);
+  });
+
+  it("skips a migration applied by another connection after the version read", async () => {
+    const file = path.join(tempDir, "race.db");
+    const winner = await openRaw(file);
+    const loser = await openRaw(file);
+    try {
+      let staleReads = 1;
+      const stale: SqliteDriver = {
+        name: loser.name,
+        exec: (sql) => loser.exec(sql),
+        prepare: (sql) => {
+          const statement = loser.prepare(sql);
+          if (sql !== "PRAGMA user_version" || staleReads === 0) {
+            return statement;
+          }
+          staleReads -= 1;
+          return { ...statement, get: () => ({ user_version: 0 }) };
+        },
+        close: () => loser.close(),
+      };
+      expect(runMigrations(winner)).toEqual({ from: 0, to: 1 });
+      expect(runMigrations(stale)).toEqual({ from: 0, to: 1 });
+      expect(readUserVersion(loser)).toBe(1);
+      expect(names(loser, "table")).toEqual(EXPECTED_TABLES);
+    } finally {
+      winner.close();
+      loser.close();
+    }
+  });
+
   it("supports :memory:", async () => {
     const storage = sqliteStorage({ path: ":memory:", driver: driverName });
     expect(await storage.init()).toEqual({ driver: driverName, path: ":memory:" });

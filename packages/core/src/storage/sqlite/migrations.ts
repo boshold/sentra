@@ -40,6 +40,10 @@ export function runMigrations(
       continue;
     }
     withWriteTransaction(driver, () => {
+      // Another connection may have applied it since the read above.
+      if (readUserVersion(driver) >= version) {
+        return;
+      }
       driver.exec(sql);
       driver.exec(`PRAGMA user_version = ${version}`);
     });

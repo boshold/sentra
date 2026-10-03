@@ -44,6 +44,7 @@ class SqliteStorage implements StorageAdapter {
   readonly #path: string;
   readonly #driverOption: SqliteDriverOption;
   #driver: SqliteDriver | null = null;
+  #initPromise: Promise<SqliteDriver> | null = null;
 
   public constructor(file: string, driver: SqliteDriverOption) {
     this.#path = file === MEMORY_PATH ? file : path.resolve(file);
@@ -51,9 +52,22 @@ class SqliteStorage implements StorageAdapter {
   }
 
   public async init(): Promise<{ driver: string | null; path: string | null }> {
-    if (this.#driver) {
-      return { driver: this.#driver.name, path: this.#path };
+    this.#initPromise ??= this.#openOnce();
+    const driver = await this.#initPromise;
+    return { driver: driver.name, path: this.#path };
+  }
+
+  /** A failed attempt is forgotten so `init()` can be retried. */
+  async #openOnce(): Promise<SqliteDriver> {
+    try {
+      return await this.#open();
+    } catch (error) {
+      this.#initPromise = null;
+      throw error;
     }
+  }
+
+  async #open(): Promise<SqliteDriver> {
     if (this.#path !== MEMORY_PATH) {
       mkdirSync(path.dirname(this.#path), { recursive: true });
     }
@@ -68,7 +82,7 @@ class SqliteStorage implements StorageAdapter {
       throw error;
     }
     this.#driver = driver;
-    return { driver: driver.name, path: this.#path };
+    return driver;
   }
 
   #db(): SqliteDriver {
@@ -154,6 +168,15 @@ class SqliteStorage implements StorageAdapter {
   }
 
   public async close(): Promise<void> {
+    const pending = this.#initPromise;
+    this.#initPromise = null;
+    if (pending) {
+      try {
+        await pending;
+      } catch {
+        // Reported by init().
+      }
+    }
     const driver = this.#driver;
     this.#driver = null;
     driver?.close();

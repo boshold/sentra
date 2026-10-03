@@ -26,6 +26,7 @@
     "@sentry/browser": "^11.1.0",
     "@sentry/node": "^11.1.0",
     "@types/node": "^26.2.0",
+    "@vitejs/plugin-vue": "^6.0.9",
     "@vitest/coverage-v8": "^4.1.11",
     "esbuild": "^0.28.2",
     "happy-dom": "^20.14.5",
@@ -34,7 +35,9 @@
     "oxlint-tsgolint": "^7.0.2001",
     "tsx": "^4.23.12",
     "typescript": "^7.0.2",
+    "vite": "^8.3.1",
     "vitest": "^4.1.11",
+    "vue": "^3.5.43",
     "zod": "^4.4.3"
   },
   "engines": {

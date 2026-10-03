@@ -1,11 +1,11 @@
 import { computeGrouping } from "#src/grouping/fingerprint.js";
 import type { IngestContext } from "#src/ingest/handler.js";
 import type { LiveBus } from "#src/live/bus.js";
-import { LOOPBACK_HOSTS } from "#src/normalize/frames.js";
 import { normalizeItems } from "#src/normalize/index.js";
 import type { GroupingInput, NewItem, NormalizeContext } from "#src/normalize/types.js";
 import type { ResolvedOptions } from "#src/options.js";
 import type { ParsedEnvelope } from "#src/parse/envelope.js";
+import { LOOPBACK_HOSTS } from "#src/sourcemaps/hosts.js";
 import type { IngestBatch, StorageAdapter } from "#src/storage/types.js";
 import type { Envelope, Level, SentraLogger } from "#src/types.js";
 import { uuidv7 } from "#src/util/uuidv7.js";

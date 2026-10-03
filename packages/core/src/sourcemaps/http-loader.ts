@@ -1,4 +1,3 @@
-import { LOOPBACK_HOSTS } from "#src/normalize/frames.js";
 import {
   MAX_SOURCE_BYTES,
   findSourceMappingUrl,
@@ -6,6 +5,7 @@ import {
   resolveMapReference,
 } from "#src/sourcemaps/extract.js";
 import type { LoadResult } from "#src/sourcemaps/extract.js";
+import { isAllowedUrl } from "#src/sourcemaps/hosts.js";
 
 interface HttpLoaderOptions {
   allowedHosts: ReadonlySet<string>;
@@ -19,49 +19,9 @@ type FetchResult =
   | { ok: true; text: string; finalUrl: URL; headers: Headers }
   | { ok: false; reason: string };
 
-const DEFAULT_ALLOWED_HOSTS: readonly string[] = LOOPBACK_HOSTS;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const MAX_REDIRECTS = 3;
 const JAVASCRIPT_CONTENT_TYPE = /^(?:text|application)\/(?:x-)?(?:javascript|ecmascript)\b/i;
-
-/** Accepts `host`, `host:port`, `[v6]`, `[v6]:port` and bare IPv6; `null` for anything URL-like. */
-function parseAllowedHost(entry: string): string | null {
-  const value = entry.trim();
-  if (value === "" || /[/\\@?#\s]/.test(value)) {
-    return null;
-  }
-  const isBareIpv6 = !value.startsWith("[") && value.split(":").length > 2;
-  const hostname = URL.parse(`http://${isBareIpv6 ? `[${value}]` : value}`)?.hostname;
-  return hostname === undefined || hostname === "" ? null : hostname;
-}
-
-function addHost(hosts: Set<string>, entry: string): void {
-  const hostname = parseAllowedHost(entry);
-  if (hostname === null) {
-    return;
-  }
-  hosts.add(hostname);
-  if (hostname.startsWith("[")) {
-    hosts.add(hostname.slice(1, -1));
-  }
-}
-
-function normalizeAllowedHosts(extra: readonly string[]): Set<string> {
-  const hosts = new Set<string>();
-  for (const entry of [...DEFAULT_ALLOWED_HOSTS, ...extra]) {
-    addHost(hosts, entry);
-  }
-  return hosts;
-}
-
-function isAllowedUrl(url: URL, allowedHosts: ReadonlySet<string>): boolean {
-  return (
-    (url.protocol === "http:" || url.protocol === "https:") &&
-    url.username === "" &&
-    url.password === "" &&
-    allowedHosts.has(url.hostname.toLowerCase())
-  );
-}
 
 function isTimeout(error: unknown, signal: AbortSignal): boolean {
   if (signal.aborted) {
@@ -207,11 +167,5 @@ async function loadHttpSourceMap(url: URL, options: HttpLoaderOptions): Promise<
   return toLoaded(mapResult.text, mapResult.finalUrl.href);
 }
 
-export {
-  DEFAULT_ALLOWED_HOSTS,
-  isAllowedUrl,
-  loadHttpSourceMap,
-  normalizeAllowedHosts,
-  parseAllowedHost,
-};
+export { loadHttpSourceMap };
 export type { HttpLoaderOptions };

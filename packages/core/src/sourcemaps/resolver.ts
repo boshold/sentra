@@ -16,11 +16,8 @@ import {
   resolveInsideRoots,
   resolveRoots,
 } from "#src/sourcemaps/fs-loader.js";
-import {
-  isAllowedUrl,
-  loadHttpSourceMap,
-  normalizeAllowedHosts,
-} from "#src/sourcemaps/http-loader.js";
+import { isAllowedUrl, normalizeAllowedHosts } from "#src/sourcemaps/hosts.js";
+import { loadHttpSourceMap } from "#src/sourcemaps/http-loader.js";
 import { createBudget, createTraceMap, mapFrame } from "#src/sourcemaps/mapper.js";
 import type { Budget } from "#src/sourcemaps/mapper.js";
 import { classifyLocation, frameLocation } from "#src/sourcemaps/paths.js";

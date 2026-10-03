@@ -1,5 +1,6 @@
-import { LOOPBACK_HOSTS, computeInApp, normalizeFrames } from "#src/normalize/frames.js";
+import { computeInApp, normalizeFrames } from "#src/normalize/frames.js";
 import type { FrameOptions } from "#src/normalize/frames.js";
+import { LOOPBACK_HOSTS } from "#src/sourcemaps/hosts.js";
 
 const NODE: FrameOptions = { platform: "node", allowedHosts: [] };
 const BROWSER: FrameOptions = { platform: "javascript", allowedHosts: [] };
@@ -99,6 +100,13 @@ describe("computeInApp", () => {
     ["https://cdn.example.com/lib.js", [], false],
     ["https://cdn.example.com/lib.js", ["cdn.example.com"], true],
     ["https://CDN.example.com/lib.js", ["cdn.example.com"], true],
+    ["http://devbox:5173/src/App.vue", ["devbox:5173"], true],
+    ["http://devbox:5173/src/App.vue", ["devbox"], true],
+    ["http://devbox:5173/src/App.vue", ["[fe80::1]:5173"], false],
+    ["http://[fe80::1]:5173/src/App.vue", ["fe80::1"], true],
+    ["http://[fe80::1]:5173/src/App.vue", ["[fe80::1]:5173"], true],
+    ["http://user@cdn.example.com/lib.js", ["cdn.example.com"], true],
+    ["http://[bad/lib.js", [], true],
     ["http://[::1]:5173/src/a.ts", [], true],
     ["http://127.0.0.1:5173/src/a.ts", [], true],
     ["/src/a.ts", [], true],

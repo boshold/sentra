@@ -2,12 +2,8 @@ import { createServer } from "node:http";
 import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 
-import {
-  DEFAULT_ALLOWED_HOSTS,
-  isAllowedUrl,
-  loadHttpSourceMap,
-  normalizeAllowedHosts,
-} from "#src/sourcemaps/http-loader.js";
+import { LOOPBACK_HOSTS, isAllowedUrl, normalizeAllowedHosts } from "#src/sourcemaps/hosts.js";
+import { loadHttpSourceMap } from "#src/sourcemaps/http-loader.js";
 import type { HttpLoaderOptions } from "#src/sourcemaps/http-loader.js";
 
 type Handler = (req: IncomingMessage, res: ServerResponse) => void;
@@ -296,9 +292,7 @@ describe("isAllowedUrl", () => {
     ["dev local"],
     [""],
   ])("ignores invalid host entry %j", (entry) => {
-    expect([...normalizeAllowedHosts([entry])].toSorted()).toEqual(
-      [...DEFAULT_ALLOWED_HOSTS].toSorted(),
-    );
+    expect([...normalizeAllowedHosts([entry])].toSorted()).toEqual([...LOOPBACK_HOSTS].toSorted());
   });
 
   it("does not allow the scheme of a URL-like entry as hostname", () => {
@@ -321,8 +315,6 @@ describe("isAllowedUrl", () => {
   });
 
   it("includes the loopback defaults", () => {
-    expect([...normalizeAllowedHosts([])].toSorted()).toEqual(
-      [...DEFAULT_ALLOWED_HOSTS].toSorted(),
-    );
+    expect([...normalizeAllowedHosts([])].toSorted()).toEqual([...LOOPBACK_HOSTS].toSorted());
   });
 });

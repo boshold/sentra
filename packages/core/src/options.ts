@@ -12,7 +12,7 @@ import {
 import { buildDsn } from "#src/dsn.js";
 import { SentraConfigError } from "#src/errors.js";
 import { parseDuration } from "#src/query/duration.js";
-import { parseAllowedHost } from "#src/sourcemaps/http-loader.js";
+import { parseAllowedHost } from "#src/sourcemaps/hosts.js";
 import { memoryStorage } from "#src/storage/memory/index.js";
 import type { StorageAdapter } from "#src/storage/types.js";
 import type { Duration, SentraLogger } from "#src/types.js";

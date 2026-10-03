@@ -49,7 +49,7 @@ export {
   renderScopeTable,
 } from "#src/render/item.js";
 export { createSentra } from "#src/sentra.js";
-export { parseAllowedHost } from "#src/sourcemaps/http-loader.js";
+export { parseAllowedHost } from "#src/sourcemaps/hosts.js";
 export type { Sentra, SentraBlob, SentraInfo, SentraQuery } from "#src/sentra.js";
 export { memoryStorage } from "#src/storage/memory/index.js";
 export type { MemoryStorageOptions } from "#src/storage/memory/index.js";

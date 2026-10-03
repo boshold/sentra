@@ -619,6 +619,28 @@ class MemoryStorage implements StorageAdapter {
     const removed = this.#removeItems(new Set(oldest));
     this.#dropEmptyEnvelopes(removed.envelopes);
     this.#dropEmptyIssues(removed.issues);
+    for (const issueId of removed.issues) {
+      this.#refreshLatestEvent(issueId);
+    }
+  }
+
+  /** Eviction keeps the lifetime `count`; only the latest-event fields follow the survivors. */
+  #refreshLatestEvent(issueId: string): void {
+    const issue = this.#issues.get(issueId);
+    if (issue === undefined || this.#items.has(issue.lastItemId)) {
+      return;
+    }
+    const latest = [...(this.#issueItems.get(issueId) ?? [])]
+      .map((id) => this.#items.get(id))
+      .filter((item): item is Item => item !== undefined)
+      .toSorted(byReceiptAsc)
+      .at(-1);
+    const metadata = latest === undefined ? null : issueMetadataOf(latest);
+    if (latest === undefined || metadata === null) {
+      return;
+    }
+    issue.lastItemId = latest.id;
+    Object.assign(issue, metadata);
   }
 }
 

@@ -54,6 +54,45 @@ describe("memoryStorage", () => {
     expect(survivor).toMatchObject({ count: 2, services: ["web"] });
   });
 
+  it("refreshes an issue's latest event when eviction removes it", async () => {
+    const storage = memoryStorage({ maxItems: 2 });
+    const issueId = "0000000000000003";
+    const lowerIdLaterReceipt = makeBatch({
+      receivedAt: "2026-10-01T12:00:01.000Z",
+      items: [{ kind: "message", issueId, level: "fatal", data: { message: "first" } }],
+    });
+    const higherIdEarlierReceipt = makeBatch({
+      receivedAt: "2026-10-01T12:00:00.000Z",
+      items: [
+        {
+          kind: "message",
+          issueId,
+          level: "warning",
+          platform: "node",
+          data: { message: "second", culprit: "app.js" },
+        },
+      ],
+    });
+    await storage.write(lowerIdLaterReceipt);
+    await storage.write(higherIdEarlierReceipt);
+    await expect(storage.getIssue(issueId)).resolves.toMatchObject({
+      lastItemId: lowerIdLaterReceipt.items[0]?.item.id,
+    });
+
+    await storage.write(makeBatch({ items: [{}] }));
+    const survivorId = higherIdEarlierReceipt.items[0]?.item.id ?? "";
+    const issue = await storage.getIssue(issueId);
+    expect(issue).toMatchObject({
+      lastItemId: survivorId,
+      title: "second",
+      culprit: "app.js",
+      level: "warning",
+      platform: "node",
+      count: 2,
+    });
+    expect(await storage.getItem(issue?.lastItemId ?? "")).not.toBeNull();
+  });
+
   it("bounds failed envelopes to maxItems", async () => {
     const storage = memoryStorage({ maxItems: 2 });
     const batches = [1, 2, 3].map(() => makeBatch({ parseError: "bad" }));

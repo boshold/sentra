@@ -45,6 +45,14 @@ function normalizeText(text: string): string {
     .replace(NUMBER_PATTERN, "<n>");
 }
 
+function decodePath(path: string): string {
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    return path;
+  }
+}
+
 function normPath(frame: Frame): string {
   if (frame.mapped !== null) {
     return frame.mapped.source;
@@ -54,7 +62,7 @@ function normPath(frame: Frame): string {
     return "?";
   }
   if (SCHEME_PATTERN.test(location) && URL.canParse(location)) {
-    return new URL(location).pathname;
+    return decodePath(new URL(location).pathname);
   }
   return location.replace(QUERY_OR_HASH_PATTERN, "");
 }
@@ -96,7 +104,7 @@ function resolveComponents(kind: GroupingKind, data: EventData, grouping: Groupi
 
 function rawTitle(kind: GroupingKind, data: EventData): string {
   if (kind === "message") {
-    return (data.message ?? "").split(LINE_BREAK_PATTERN, 1)[0] ?? "";
+    return (data.message ?? "").split(LINE_BREAK_PATTERN).find((line) => line.trim() !== "") ?? "";
   }
   const primary = data.exceptions.at(-1);
   return [primary?.type, primary?.value]
@@ -114,7 +122,7 @@ function crashingFrame(frames: Frame[]): Frame | undefined {
 }
 
 function resolveCulprit(kind: GroupingKind, data: EventData): string | null {
-  if (data.culprit !== null) {
+  if (data.culprit !== null && data.culprit !== "") {
     return data.culprit;
   }
   if (data.transaction !== null) {
@@ -125,7 +133,7 @@ function resolveCulprit(kind: GroupingKind, data: EventData): string | null {
   if (frame === undefined) {
     return null;
   }
-  const source = frame.mapped?.source ?? normPath(frame);
+  const source = normPath(frame);
   const line = frame.mapped?.lineno ?? frame.lineno;
   const location = line === null ? source : `${source}:${line}`;
   return `${frameFunction(frame) ?? "?"} (${location})`;

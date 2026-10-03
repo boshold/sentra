@@ -116,9 +116,24 @@ describe("normPath", () => {
     [frame({ filename: "/abs/x.js?v=2" }), "/abs/x.js"],
     [frame({ filename: "node:internal/process" }), "node:internal/process"],
     [frame({ filename: null }), "?"],
+    [frame({ filename: "file:///home/u/bad%zz/x.mjs" }), "/home/u/bad%zz/x.mjs"],
     [frame({ mapped: mapped() }), "components/User/Card.vue"],
   ])("normalizes %#", (input, expected) => {
     expect(normPath(input)).toBe(expected);
+  });
+});
+
+describe("normPath decoding", () => {
+  it.each([
+    ["file:///home/u/my app/x.mjs", "/home/u/my app/x.mjs"],
+    ["file:///home/u/my%20app/x.mjs", "/home/u/my app/x.mjs"],
+    ["file:///home/u/äpp/größe.mjs", "/home/u/äpp/größe.mjs"],
+    ["http://localhost:3000/src/my%20dir/ä.ts?t=1", "/src/my dir/ä.ts"],
+  ])("decodes %j to match the plain path", (url, plain) => {
+    expect(normPath(frame({ filename: url }))).toBe(plain);
+    const fromUrl = defaultComponents("error", errorWith([frame({ filename: url })]), null);
+    const fromPlain = defaultComponents("error", errorWith([frame({ filename: plain })]), null);
+    expect(fromUrl).toEqual(fromPlain);
   });
 });
 
@@ -273,6 +288,15 @@ describe("computeGrouping", () => {
       expect(group(eventData({ ...errorWith(frames), transaction: "t" })).culprit).toBe("t");
     });
 
+    it("treats an empty payload culprit as missing", () => {
+      expect(
+        group(eventData({ ...errorWith([frame()]), culprit: "", transaction: "t" })).culprit,
+      ).toBe("t");
+      expect(group(eventData({ ...errorWith([frame()]), culprit: "" })).culprit).toBe(
+        "load (/src/a.ts:10)",
+      );
+    });
+
     it("uses the crashing in-app frame", () => {
       const data = errorWith([
         frame({ function: "outer", lineno: 3 }),
@@ -332,7 +356,9 @@ describe("computeGrouping", () => {
       ["first\nsecond", "first"],
       ["first\r\nsecond", "first"],
       ["", "<unknown error>"],
-      ["\nsecond", "<unknown error>"],
+      ["\nsecond", "second"],
+      ["  \r\n\nthird\nfourth", "third"],
+      ["\n \n", "<unknown error>"],
     ])("message title for %j", (message, expected) => {
       expect(group(eventData({ message }), { kind: "message" }).title).toBe(expected);
     });

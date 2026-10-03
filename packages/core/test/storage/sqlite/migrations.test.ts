@@ -215,6 +215,22 @@ describe.each(drivers)("sqliteStorage with %s", (driverName) => {
     await storage.close();
   });
 
+  it("keeps an init() started after close() even if an older init() is still pending", async () => {
+    const storage = sqliteStorage({ path: ":memory:", driver: driverName });
+    const first = storage.init();
+    const closing = storage.close();
+    const second = storage.init();
+    await closing;
+    await expect(first).rejects.toMatchObject({ code: "storage_unavailable" });
+    expect(await second).toEqual({ driver: driverName, path: ":memory:" });
+    expect(await storage.listScopes({})).toEqual([]);
+    expect(await storage.init()).toEqual({ driver: driverName, path: ":memory:" });
+    expect(vi.mocked(loadDriver)).toHaveBeenCalledTimes(2);
+    await storage.close();
+    await storage.close();
+    await expect(storage.listScopes({})).rejects.toMatchObject({ code: "storage_unavailable" });
+  });
+
   it("lets two instances open the same fresh file", async () => {
     const file = path.join(tempDir, "shared.db");
     const first = sqliteStorage({ path: file, driver: driverName });

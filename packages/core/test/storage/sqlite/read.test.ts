@@ -7,7 +7,7 @@ import { object, string } from "zod";
 import { decodeCursor } from "#src/query/cursor.js";
 import type { SqliteDriver, SqliteParam } from "#src/storage/sqlite/driver/types.js";
 import { sqliteStorage } from "#src/storage/sqlite/index.js";
-import { buildIssueWhere, buildItemWhere, where } from "#src/storage/sqlite/queries.js";
+import { listIssuesQuery, listItemsQuery } from "#src/storage/sqlite/read.js";
 import type { ResolvedPage, StorageAdapter } from "#src/storage/types.js";
 import type { ScopeFilter } from "#src/types.js";
 
@@ -288,27 +288,13 @@ describe.each(drivers)("sqlite reads with %s", (driverName) => {
     }
 
     it("uses the scope, issue and issues_scope indexes", async () => {
-      const scoped = buildItemWhere({ project: ["p"], session: ["s"], service: ["web"] });
-      expect(
-        await plan(
-          `SELECT id FROM items ${where(scoped)} ORDER BY id DESC LIMIT 10`,
-          scoped.params,
-        ),
-      ).toContain("items_scope_time");
-      const byIssue = buildItemWhere({ issueId: I1 });
-      expect(
-        await plan(
-          `SELECT id FROM items ${where(byIssue)} ORDER BY id DESC LIMIT 10`,
-          byIssue.params,
-        ),
-      ).toMatch(/\bitems_issue\b/);
-      const issues = buildIssueWhere({ project: ["p"], session: ["s"] });
-      expect(
-        await plan(
-          `SELECT id FROM issues ${where(issues)} ORDER BY last_seen_at DESC, id DESC LIMIT 10`,
-          issues.params,
-        ),
-      ).toContain("issues_scope");
+      const page = { limit: 10, cursor: null };
+      const scoped = listItemsQuery({ project: ["p"], session: ["s"], service: ["web"] }, page);
+      expect(await plan(scoped.sql, scoped.params)).toContain("items_scope_time");
+      const byIssue = listItemsQuery({ issueId: I1 }, page);
+      expect(await plan(byIssue.sql, byIssue.params)).toMatch(/\bitems_issue\b/);
+      const issues = listIssuesQuery({ project: ["p"], session: ["s"] }, page);
+      expect(await plan(issues.sql, issues.params)).toContain("issues_scope");
     });
   });
 });

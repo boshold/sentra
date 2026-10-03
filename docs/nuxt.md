@@ -27,7 +27,7 @@ export default defineNuxtConfig({
 });
 ```
 
-`sentry.server.config.ts` (picked up by the module; no `--import` needed in dev):
+`sentry.server.config.ts` in the project root, next to `nuxt.config.ts` (picked up by the module; no `--import` needed in dev):
 
 ```ts
 import * as Sentry from "@sentry/nuxt";
@@ -39,7 +39,7 @@ Sentry.init({
 });
 ```
 
-`sentry.client.config.ts`:
+`sentry.client.config.ts`, also in the project root:
 
 ```ts
 import * as Sentry from "@sentry/nuxt";
@@ -77,7 +77,7 @@ const sentra = await createSentra({
 http.createServer(toNodeListener(sentra.handle)).listen(8969, "127.0.0.1");
 ```
 
-Roots can also be added at runtime with `sentra.addSourceRoot(dir)`. Sentra listens on `127.0.0.1` only; use `127.0.0.1` (not `localhost`) in the DSN, because browsers may resolve `localhost` to `::1`.
+An embedding host can also add roots at runtime with `sentra.addSourceRoot(dir)`; with the CLI, repeat `--source-root`. Sentra listens on `127.0.0.1` only; use `127.0.0.1` (not `localhost`) in the DSN, because browsers may resolve `localhost` to `::1`.
 
 ## What gets mapped
 
@@ -147,17 +147,17 @@ With the plugin, SSR frames carry the original line and column (e.g. `app/pages/
 
 Each error/message record has `data.sourceMaps` with `status` (`not_applicable`, `none`, `partial`, `full`) and `errors: { absPath, reason }[]`. Common reasons:
 
-| Reason                                     | Meaning                                                                     | Fix                                                                  |
-| ------------------------------------------ | --------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `not_javascript`                           | The dev server answered with HTML (unknown path, SPA fallback).             | Check that the frame URL is a module the dev server still serves.    |
-| `http_status_<code>`                       | The dev server answered with an error status (`504` = stale optimized dep). | Reload the page so the browser uses current URLs.                    |
-| `fetch_failed` / `timeout`                 | The dev server is not reachable or too slow.                                | Make sure the dev server runs on the host and port in the frame URL. |
-| `budget_exceeded`                          | The per-envelope time budget (3 s) is used up.                              | Usually transient; raise `sourceMaps.budgetMs`.                      |
-| `no_source_map`                            | The file has no `sourceMappingURL` (often libraries in `node_modules`).     | Nothing to do for library frames.                                    |
-| `invalid_source_map` / `no_mapping`        | The map is broken or has no entry for the position.                         | Restart the dev server.                                              |
-| `map_outside_source_root`                  | The map file is missing or outside the source roots.                        | Add the directory with `addSourceRoot`.                              |
-| `map_not_allowed` / `redirect_not_allowed` | The map or a redirect points to another host or port.                       | Not followed on purpose.                                             |
-| `ssr_position_unreliable`                  | SSR frame with generated positions (see above).                             | Add the SSR plugin; positions are then correct, the flag stays.      |
+| Reason                                     | Meaning                                                                     | Fix                                                                                             |
+| ------------------------------------------ | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `not_javascript`                           | The dev server answered with HTML (unknown path, SPA fallback).             | Check that the frame URL is a module the dev server still serves.                               |
+| `http_status_<code>`                       | The dev server answered with an error status (`504` = stale optimized dep). | Reload the page so the browser uses current URLs.                                               |
+| `fetch_failed` / `timeout`                 | The dev server is not reachable or too slow.                                | Make sure the dev server runs on the host and port in the frame URL.                            |
+| `budget_exceeded`                          | The per-envelope time budget (3 s) is used up.                              | Usually transient. Embedding hosts can raise `sourceMaps.budgetMs`; the CLI has no flag for it. |
+| `no_source_map`                            | The file has no `sourceMappingURL` (often libraries in `node_modules`).     | Nothing to do for library frames.                                                               |
+| `invalid_source_map` / `no_mapping`        | The map is broken or has no entry for the position.                         | Restart the dev server.                                                                         |
+| `map_outside_source_root`                  | The map file is missing or outside the source roots.                        | Add the directory with `--source-root` (CLI) or `addSourceRoot` (embedding).                    |
+| `map_not_allowed` / `redirect_not_allowed` | The map or a redirect points to another host or port.                       | Not followed on purpose.                                                                        |
+| `ssr_position_unreliable`                  | SSR frame with generated positions (see above).                             | Add the SSR plugin; positions are then correct, the flag stays.                                 |
 
 Frames on hosts outside `sourceMaps.allowedHosts` (loopback by default) and files outside the source roots are not candidates: they are not listed in `errors`, and `status` is `not_applicable` when no frame is a candidate.
 

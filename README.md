@@ -51,16 +51,16 @@ Errors, messages and logs are printed as they arrive:
 
 Common flags (full list in the [CLI README](packages/cli/README.md#flags)):
 
-| Flag            | Default                           | Description                                         |
-| --------------- | --------------------------------- | --------------------------------------------------- |
-| `--port`, `-p`  | `8969`                            | Port; `0` picks a free port                         |
-| `--host`        | `127.0.0.1`                       | Bind address                                        |
-| `--storage`     | `sqlite`                          | `memory` or `sqlite`                                |
-| `--db`          | `$XDG_DATA_HOME/sentra/sentra.db` | SQLite file                                         |
-| `--source-root` | current directory                 | Directory Sentra may read source maps from (repeat) |
-| `--show`        | `error,message,log`               | Kinds printed live, or `all`                        |
-| `--format`      | `pretty`                          | `pretty` or `json` (NDJSON)                         |
-| `--quiet`, `-q` | off                               | No live output                                      |
+| Flag            | Default                           | Description                                               |
+| --------------- | --------------------------------- | --------------------------------------------------------- |
+| `--port`, `-p`  | `8969`                            | Port; `0` picks a free port                               |
+| `--host`        | `127.0.0.1`                       | Bind address                                              |
+| `--storage`     | `sqlite`                          | `memory` or `sqlite`                                      |
+| `--db`          | `$XDG_DATA_HOME/sentra/sentra.db` | SQLite file, shared by all projects (outside the project) |
+| `--source-root` | current directory                 | Directory Sentra may read source maps from (repeat)       |
+| `--show`        | `error,message,log`               | Kinds printed live, or `all`                              |
+| `--format`      | `pretty`                          | `pretty` or `json` (NDJSON)                               |
+| `--quiet`, `-q` | off                               | No live output                                            |
 
 ## DSN format
 
@@ -163,7 +163,7 @@ Full API: [packages/core/README.md](packages/core/README.md).
 
 ### ZAPS
 
-ZAPS, the author's local dev service manager, is the reference host. The integration lives in the ZAPS repo; this is the contract it follows:
+[ZAPS](https://github.com/boshold/zaps), the author's local dev service manager, is the reference host. The integration lives in the ZAPS repo; this is the contract it follows:
 
 - ZAPS owns the HTTP server on port `8969` and mounts `toNodeListener(sentra.handle)`.
 - `session` is the ZAPS `sessionId` (stable per checkout or worktree), `service` is the ZAPS service name. Each worktree gets its own issues.

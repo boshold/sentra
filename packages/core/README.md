@@ -20,11 +20,7 @@ pnpm add @bosdev/sentra-core
 npm install @bosdev/sentra-core
 ```
 
-Optional, for the preferred SQLite driver:
-
-```bash
-pnpm add better-sqlite3
-```
+`better-sqlite3`, the preferred SQLite driver, is an optional dependency and is installed with the package. If it cannot be installed or loaded on a platform, Sentra uses `node:sqlite`.
 
 Requires Node `>=22.15` or Bun `>=1.4`.
 
@@ -85,7 +81,7 @@ const issues = await sentra.query.listIssues({
 | Option                      | Default                                 | Description                                                                                 |
 | --------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `storage`                   | `memoryStorage()`                       | Storage adapter                                                                             |
-| `publicUrl`                 | none                                    | Base URL for `getDsn()`, e.g. `http://127.0.0.1:8969`                                       |
+| `publicUrl`                 | none                                    | Base URL for `getDsn()` without path, e.g. `http://127.0.0.1:8969`                          |
 | `retention.maxIdle`         | `"30d"` (`DEFAULT_MAX_IDLE`)            | Delete a session after this time without events; duration or `"never"`                      |
 | `retention.noiseMaxAge`     | `"7d"` (`DEFAULT_NOISE_MAX_AGE`)        | Delete `span`, `transaction`, `log`, `other` records older than this; duration or `"never"` |
 | `limits.maxEnvelopeBytes`   | 20 MiB (`DEFAULT_MAX_ENVELOPE_BYTES`)   | Max envelope size, before and after decompression                                           |

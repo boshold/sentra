@@ -22,7 +22,7 @@ npm install -g @bosdev/sentra-cli
 sentra
 ```
 
-Requires Node `>=22.15`. `better-sqlite3` is used when it is installed; otherwise Sentra uses `node:sqlite`.
+Requires Node `>=22.15`. `better-sqlite3` is installed with the package as an optional dependency; if it cannot be installed or loaded, Sentra uses `node:sqlite`.
 
 Then initialize the SDK with the printed DSN:
 
@@ -47,13 +47,13 @@ With `--format json` or `--quiet` the banner goes to stderr.
 
 ## Flags
 
-`sentra` and `sentra start` take the same flags.
+`sentra` and `sentra start` take the same flags, except `--version`, which only `sentra` accepts.
 
 | Flag                | Type                                   | Default                           | Description                                                                                               |
 | ------------------- | -------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | `--host`            | string                                 | `127.0.0.1`                       | Bind address                                                                                              |
 | `--port`, `-p`      | number                                 | `8969`                            | Port; `0` picks a free port (the banner shows it). Port in use: exit 1                                    |
-| `--public-url`      | URL                                    | `http://127.0.0.1:<port>`         | Base URL for printed DSNs                                                                                 |
+| `--public-url`      | URL                                    | `http://127.0.0.1:<port>`         | Base URL for printed DSNs: scheme, host and port, no path                                                 |
 | `--storage`         | `memory` \| `sqlite`                   | `sqlite`                          | Storage                                                                                                   |
 | `--db`              | path                                   | `$XDG_DATA_HOME/sentra/sentra.db` | SQLite file; directories are created                                                                      |
 | `--sqlite-driver`   | `auto` \| `better-sqlite3` \| `node`   | `auto`                            | Force a SQLite driver                                                                                     |
@@ -79,7 +79,7 @@ With `--format json` or `--quiet` the banner goes to stderr.
 | `--no-color`        | flag                                   | off                               | Disable colors                                                                                            |
 | `--log-level`       | `error` \| `warn` \| `info` \| `debug` | `warn`                            | Internal log level (stderr)                                                                               |
 | `--help`, `-h`      | flag                                   |                                   | Show help                                                                                                 |
-| `--version`         | flag                                   |                                   | Show version                                                                                              |
+| `--version`         | flag                                   |                                   | Show version (`sentra` only, not `sentra start`)                                                          |
 
 Durations: `<number><ms|s|m|h|d|w>`, e.g. `12h`, `30d`. Sizes: `<number>[b|kb|mb|gb]` in powers of 1024, e.g. `512kb`, `20mb`.
 
@@ -94,10 +94,10 @@ sentra dsn --project my-app --service web --public-url http://192.168.1.20:8969
 # http://sentra@192.168.1.20:8969/my-app/_/web/1
 ```
 
-| Flag                                  | Default                 | Description    |
-| ------------------------------------- | ----------------------- | -------------- |
-| `--project`, `--session`, `--service` | none                    | Scope segments |
-| `--public-url`                        | `http://127.0.0.1:8969` | Base URL       |
+| Flag                                  | Default                 | Description       |
+| ------------------------------------- | ----------------------- | ----------------- |
+| `--project`, `--session`, `--service` | none                    | Scope segments    |
+| `--public-url`                        | `http://127.0.0.1:8969` | Base URL, no path |
 
 ## Exit codes
 
@@ -174,7 +174,7 @@ event: envelope.failed
 data: {"type":"envelope.failed","envelope":{...},"error":"..."}
 ```
 
-A `: ping` comment is sent every 15 s.
+The stream starts with a `: connected` comment, then a `: ping` comment follows every 15 s. Clients ignore both.
 
 ```bash
 curl -N "http://127.0.0.1:8969/api/sentra/stream?project=my-app&kind=error"
@@ -200,7 +200,7 @@ All tools are read-only and return compact Markdown.
 
 ## Database location
 
-The SQLite file is `$XDG_DATA_HOME/sentra/sentra.db` when `XDG_DATA_HOME` is an absolute path, otherwise `~/.local/share/sentra/sentra.db`. Change it with `--db`. `--storage memory` keeps everything in memory (capped by `--max-items`) and loses it on exit.
+The SQLite file is `$XDG_DATA_HOME/sentra/sentra.db` when `XDG_DATA_HOME` is an absolute path, otherwise `~/.local/share/sentra/sentra.db`. This is outside the project directory, so all projects share one database by default. Change it with `--db`. `--storage memory` keeps everything in memory (capped by `--max-items`) and loses it on exit.
 
 ## LAN use
 

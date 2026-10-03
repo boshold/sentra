@@ -1,5 +1,5 @@
 import type { Frame } from "#src/types.js";
-import { fenceFor, sanitizeText } from "#src/util/text.js";
+import { fenceFor, sanitizeText, singleLine } from "#src/util/text.js";
 
 const DEFAULT_MAX_IN_APP = 5;
 
@@ -13,22 +13,26 @@ function position(lineno: number | null, colno: number | null, marker: string): 
 function formatFrameLocation(frame: Frame): string {
   const { mapped } = frame;
   if (mapped !== null) {
-    return sanitizeText(`${mapped.source}${position(mapped.lineno, mapped.colno, "")}`);
+    return singleLine(`${mapped.source}${position(mapped.lineno, mapped.colno, "")}`);
   }
   const file = frame.absPath ?? frame.filename ?? "<unknown>";
   const marker = frame.positionReliable ? "" : "~";
-  return sanitizeText(`${file}${position(frame.lineno, frame.colno, marker)}`);
+  return singleLine(`${file}${position(frame.lineno, frame.colno, marker)}`);
 }
 
 function functionName(frame: Frame): string {
-  return sanitizeText(frame.mapped?.function ?? frame.function ?? "<anonymous>");
+  return singleLine(frame.mapped?.function ?? frame.function ?? "<anonymous>");
 }
 
 /** Crashing frame first; frames are treated as in-app when none is. */
-function crashFirst(frames: Frame[]): { frames: Frame[]; isInApp: (frame: Frame) => boolean } {
+function crashFirst(frames: Frame[]): {
+  frames: Frame[];
+  hasInApp: boolean;
+  isInApp: (frame: Frame) => boolean;
+} {
   const reversed = frames.toReversed();
   const hasInApp = reversed.some((frame) => frame.inApp);
-  return { frames: reversed, isInApp: (frame) => !hasInApp || frame.inApp };
+  return { frames: reversed, hasInApp, isInApp: (frame) => !hasInApp || frame.inApp };
 }
 
 /** CLI style, crashing frame first, without indentation. */
@@ -43,7 +47,7 @@ function renderFrameLines(frames: Frame[], options: { maxInApp?: number } = {}):
   );
   const rest = ordered.frames.filter((frame) => !printed.includes(frame));
   if (rest.length > 0) {
-    const suffix = rest.every((frame) => !frame.inApp) ? " (library)" : "";
+    const suffix = ordered.hasInApp && rest.every((frame) => !frame.inApp) ? " (library)" : "";
     lines.push(`… ${rest.length} more frames${suffix}`);
   }
   return lines;

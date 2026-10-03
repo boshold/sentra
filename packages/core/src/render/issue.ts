@@ -1,6 +1,6 @@
 import { formatRelativeTime, renderItemDetail } from "#src/render/item.js";
 import type { Issue, IssueDetail } from "#src/types.js";
-import { firstLine, sanitizeText } from "#src/util/text.js";
+import { firstLine, indentContinuation, sanitizeText, singleLine } from "#src/util/text.js";
 
 function renderIssueLine(issue: Issue, now: Date): string {
   const line = [
@@ -8,7 +8,7 @@ function renderIssueLine(issue: Issue, now: Date): string {
     issue.level,
     `${issue.count}×`,
     formatRelativeTime(issue.lastSeenAt, now),
-    `[${issue.services.join(",")}]`,
+    singleLine(`[${issue.services.join(",")}]`),
     firstLine(issue.title),
   ].join(" ");
   return issue.culprit === null ? line : `${line} — ${firstLine(issue.culprit)}`;
@@ -24,8 +24,8 @@ function renderIssueDetail(detail: IssueDetail, now: Date): string {
     `count: ${detail.count}`,
     `first seen: ${detail.firstSeenAt} (${formatRelativeTime(detail.firstSeenAt, now)})`,
     `last seen: ${detail.lastSeenAt} (${formatRelativeTime(detail.lastSeenAt, now)})`,
-    `services: ${detail.services.join(", ")}`,
-    ...(detail.culprit === null ? [] : [`culprit: ${detail.culprit}`]),
+    `services: ${firstLine(detail.services.join(", "))}`,
+    ...(detail.culprit === null ? [] : [`culprit: ${indentContinuation(detail.culprit)}`]),
     "",
     "## Latest event",
     detail.latest === null ? "Not stored." : renderItemDetail(detail.latest),

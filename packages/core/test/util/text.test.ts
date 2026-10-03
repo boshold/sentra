@@ -1,4 +1,10 @@
-import { fenceFor, firstLine, sanitizeText } from "#src/util/text.js";
+import {
+  fenceFor,
+  firstLine,
+  indentContinuation,
+  sanitizeText,
+  singleLine,
+} from "#src/util/text.js";
 
 describe("sanitizeText", () => {
   it.each([
@@ -26,5 +32,12 @@ describe("fenceFor", () => {
   it("is longer than any backtick run", () => {
     expect(fenceFor(["a"])).toBe("```");
     expect(fenceFor(["````", "``"])).toBe("`````");
+  });
+});
+
+describe("singleLine / indentContinuation", () => {
+  it("flattens or indents continuation lines", () => {
+    expect(singleLine("a\nb\tc\r\nd")).toBe("a b c d");
+    expect(indentContinuation("a\n## b\r\nc")).toBe("a\n    ## b\n    c");
   });
 });

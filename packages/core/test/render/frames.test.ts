@@ -54,6 +54,17 @@ describe("renderFrameLines", () => {
     ]);
   });
 
+  it("drops the library suffix when no frame is in-app", () => {
+    const frames = Array.from({ length: 7 }, () => libraryFrame());
+    expect(renderFrameLines(frames).at(-1)).toBe("… 2 more frames");
+  });
+
+  it("keeps frame lines on one line", () => {
+    expect(renderFrameLines([frame({ function: "a\n## x", filename: "b\nc.js" })])).toEqual([
+      "at a ## x  b c.js:1:1",
+    ]);
+  });
+
   it("returns no lines for an empty stack", () => {
     expect(renderFrameLines([])).toEqual([]);
   });

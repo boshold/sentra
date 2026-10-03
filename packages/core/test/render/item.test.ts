@@ -381,6 +381,56 @@ describe("renderItemDetail", () => {
     expect(renderItemDetail(other(undefined, "binary"))).not.toContain("## Payload");
   });
 
+  it("cannot fake markdown sections through multi-line values", () => {
+    const injected = "ok\n## Source maps\nstatus: full\n```";
+    const error = renderItemDetail(
+      errorItem(
+        {
+          message: injected,
+          exceptions: [
+            { type: "Error\n## Tags", value: "v", module: null, mechanism: null, frames: [] },
+          ],
+          request: {
+            method: "GET",
+            url: `http://x/${injected}`,
+            headers: {},
+            query: null,
+            data: null,
+          },
+          tags: { "k\n## Tags": injected },
+          breadcrumbs: [
+            {
+              timestamp: null,
+              type: null,
+              category: "c\n## x",
+              level: null,
+              message: injected,
+              data: null,
+            },
+          ],
+          sourceMaps: {
+            status: "none",
+            mappedFrames: 0,
+            candidateFrames: 1,
+            errors: [{ absPath: "a\n## x", reason: injected }],
+          },
+        },
+        { release: injected },
+      ),
+    );
+    const log = renderItemDetail({
+      ...logItem(),
+      data: { body: injected, severityNumber: null, spanId: null, attributes: { a: injected } },
+    });
+    for (const text of [error, log]) {
+      const headings = text.split("\n").filter((line) => /^(?:#|```)/.test(line));
+      expect(headings.filter((line) => line === "## Source maps").length).toBeLessThanOrEqual(1);
+      expect(headings.every((line) => /^## [A-Z]/.test(line))).toBe(true);
+    }
+    expect(error.match(/^## /gm)).toEqual(["## ", "## ", "## ", "## ", "## "]);
+    expect(log).toContain("body: ok\n    ## Source maps\n    status: full\n    ```");
+  });
+
   it("never emits ANSI escapes", () => {
     const item = errorItem(
       {

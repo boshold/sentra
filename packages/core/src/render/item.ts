@@ -12,7 +12,13 @@ import type {
   SpanItem,
   TransactionData,
 } from "#src/types.js";
-import { fenceFor, firstLine, sanitizeText } from "#src/util/text.js";
+import {
+  fenceFor,
+  firstLine,
+  indentContinuation,
+  sanitizeText,
+  singleLine,
+} from "#src/util/text.js";
 
 type Primitive = string | number | boolean;
 
@@ -61,7 +67,7 @@ function formatAttributes(
     return "";
   }
   const inner = entries.map(([key, value]) => `${key}: ${String(value)}`).join(", ");
-  const text = `{${sanitizeText(inner).replaceAll(/[\n\t]/g, " ")}}`;
+  const text = `{${singleLine(inner)}}`;
   return text.length > maxLength ? `${text.slice(0, Math.max(0, maxLength - 2))}…}` : text;
 }
 
@@ -75,9 +81,14 @@ function renderItemLine(item: ItemSummary): string {
   ].join(" ");
 }
 
+/** `key: value`; multi-line values are indented so they cannot fake markdown sections. */
+function field(key: string, value: Primitive): string {
+  return `${singleLine(key)}: ${indentContinuation(String(value))}`;
+}
+
 /** `key: value` lines, skipping `null` values. */
 function fieldLines(fields: [string, Primitive | null][]): string[] {
-  return fields.flatMap(([key, value]) => (value === null ? [] : [`${key}: ${String(value)}`]));
+  return fields.flatMap(([key, value]) => (value === null ? [] : [field(key, value)]));
 }
 
 function section(title: string, body: string[]): string[] {
@@ -85,7 +96,7 @@ function section(title: string, body: string[]): string[] {
 }
 
 function keyValueLines(record: Record<string, Primitive>): string[] {
-  return Object.entries(record).map(([key, value]) => `${key}: ${String(value)}`);
+  return Object.entries(record).map(([key, value]) => field(key, value));
 }
 
 function headerLines(item: Item): string[] {
@@ -105,9 +116,12 @@ function headerLines(item: Item): string[] {
 
 function exceptionTitle(type: string | null, value: string | null): string {
   if (type !== null && value !== null) {
-    return `${type}: ${firstLine(value)}`;
+    return `${singleLine(type)}: ${firstLine(value)}`;
   }
-  return type ?? (value === null ? "Exception" : firstLine(value));
+  if (type !== null) {
+    return singleLine(type);
+  }
+  return value === null ? "Exception" : firstLine(value);
 }
 
 function eventLines(data: EventData): string[] {
@@ -123,9 +137,11 @@ function eventLines(data: EventData): string[] {
   if (data.stacktrace.length > 0) {
     lines.push(...section("Stack", [renderStackMarkdown(data.stacktrace)]));
   }
-  const request = [data.request?.method, data.request?.url]
-    .filter((part) => part !== null && part !== undefined)
-    .join(" ");
+  const request = singleLine(
+    [data.request?.method, data.request?.url]
+      .filter((part) => part !== null && part !== undefined)
+      .join(" "),
+  );
   lines.push(...section("Request", request === "" ? [] : [request]));
   lines.push(...section("Tags", keyValueLines(data.tags)));
   lines.push(
@@ -140,6 +156,7 @@ function eventLines(data: EventData): string[] {
             crumb.level ?? "-",
             firstLine(crumb.message ?? ""),
           ]
+            .map(singleLine)
             .join(" ")
             .trimEnd(),
         ),
@@ -150,7 +167,7 @@ function eventLines(data: EventData): string[] {
     ...section("Source maps", [
       `status: ${sourceMaps.status}`,
       `mapped: ${sourceMaps.mappedFrames}/${sourceMaps.candidateFrames}`,
-      ...sourceMaps.errors.map((error) => `- ${error.absPath}: ${error.reason}`),
+      ...sourceMaps.errors.map((error) => singleLine(`- ${error.absPath}: ${error.reason}`)),
     ]),
   );
   return lines;
@@ -175,7 +192,7 @@ function transactionLines(data: TransactionData): string[] {
     ]),
     ...section("Spans", [
       ...spans.map((span) =>
-        `${formatDuration(span.durationMs)} ${span.op ?? "-"} ${firstLine(span.description ?? "")}`.trimEnd(),
+        `${formatDuration(span.durationMs)} ${singleLine(span.op ?? "-")} ${firstLine(span.description ?? "")}`.trimEnd(),
       ),
       ...truncatedNote(spans.length, data.spans.length, "spans"),
     ]),
@@ -199,7 +216,7 @@ function spanLines(data: SpanData, traceSpans: SpanItem[]): string[] {
     ...section("Trace spans", [
       ...longestSpans.map(
         ({ span }) =>
-          `${formatDuration(span.data.durationMs)} ${span.data.op ?? "-"} ${firstLine(span.data.name)} [${span.id}]`,
+          `${formatDuration(span.data.durationMs)} ${singleLine(span.data.op ?? "-")} ${firstLine(span.data.name)} [${span.id}]`,
       ),
       ...truncatedNote(longestSpans.length, traceSpans.length, "spans"),
     ]),
@@ -207,7 +224,7 @@ function spanLines(data: SpanData, traceSpans: SpanItem[]): string[] {
 }
 
 function logLines(data: LogData): string[] {
-  return [`body: ${data.body}`, ...section("Attributes", keyValueLines(data.attributes))];
+  return [field("body", data.body), ...section("Attributes", keyValueLines(data.attributes))];
 }
 
 function attachmentLines(data: AttachmentData): string[] {

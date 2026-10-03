@@ -46,6 +46,18 @@ describe("renderIssueDetail", () => {
     `);
   });
 
+  it("indents multi-line culprits", () => {
+    const text = renderIssueDetail(
+      { ...issue({ culprit: "a\n## Latest event" }), latest: null },
+      NOW,
+    );
+    expect(text).toContain("culprit: a\n    ## Latest event\n\n## Latest event\nNot stored.");
+    expect(text.match(/^## /gm)).toHaveLength(1);
+    expect(renderIssueLine(issue({ services: ["a\nb"], culprit: "x\ny" }), NOW)).not.toContain(
+      "\n",
+    );
+  });
+
   it("handles a pruned latest event", () => {
     const text = renderIssueDetail({ ...issue({ title: "\u001b[31mred" }), latest: null }, NOW);
     expect(text).toContain("## Latest event\nNot stored.");

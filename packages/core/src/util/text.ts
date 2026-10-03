@@ -71,4 +71,14 @@ function fenceFor(lines: string[]): string {
   return "`".repeat(Math.max(3, ...runs.map((run) => run.length + 1)));
 }
 
-export { fenceFor, firstLine, sanitizeText };
+/** Sanitized text on one line: newlines and tabs become spaces. */
+function singleLine(text: string): string {
+  return sanitizeText(text).replaceAll(/[\n\t]/g, " ");
+}
+
+/** Sanitized text whose continuation lines are indented, so they cannot start markdown blocks. */
+function indentContinuation(text: string): string {
+  return sanitizeText(text).replaceAll("\n", "\n    ");
+}
+
+export { fenceFor, firstLine, indentContinuation, sanitizeText, singleLine };

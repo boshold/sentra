@@ -5,6 +5,7 @@ interface HttpResult {
   status: number;
   headers: IncomingHttpHeaders;
   body: string;
+  bytes: Buffer;
 }
 
 /** Raw `node:http` request, so `Host` can be overridden. */
@@ -30,10 +31,12 @@ async function httpRequest(
         const chunks: Buffer[] = [];
         res.on("data", (chunk: Buffer) => chunks.push(chunk));
         res.on("end", () => {
+          const bytes = Buffer.concat(chunks);
           resolve({
             status: res.statusCode ?? 0,
             headers: res.headers,
-            body: Buffer.concat(chunks).toString("utf8"),
+            body: bytes.toString("utf8"),
+            bytes,
           });
         });
         res.on("error", reject);

@@ -70,6 +70,16 @@ function selectTarget(routes: Routes, pathname: string): Target {
   return { kind: "ingest" };
 }
 
+/** WHATWG-normalized pathname; handlers must match on this, never on raw `req.url`. */
+function routePathname(req: IncomingMessage): string {
+  return URL.parse(req.url ?? "/", "http://x")?.pathname ?? "/";
+}
+
+/** Normalized query parameters of the request. */
+function routeSearchParams(req: IncomingMessage): URLSearchParams {
+  return URL.parse(req.url ?? "/", "http://x")?.searchParams ?? new URLSearchParams();
+}
+
 function headerValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value.join(",") : value;
 }
@@ -107,7 +117,7 @@ function createRouter(
   }
 
   return function router(req, res) {
-    const pathname = URL.parse(req.url ?? "/", "http://x")?.pathname ?? "/";
+    const pathname = routePathname(req);
     const target = selectTarget(routes, pathname);
     if (target.kind === "ingest") {
       void dispatch(routes.ingest, req, res);
@@ -126,5 +136,5 @@ function createRouter(
   };
 }
 
-export { createRouter, sendError, sendJson };
+export { createRouter, routePathname, routeSearchParams, sendError, sendJson };
 export type { NodeListener, Routes };

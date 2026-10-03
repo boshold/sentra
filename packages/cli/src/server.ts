@@ -5,6 +5,7 @@ import { homedir } from "node:os";
 import { SentraConfigError, createSentra, toNodeListener } from "@bosdev/sentra-core";
 import type { Sentra, SentraLogger } from "@bosdev/sentra-core";
 
+import { createApiHandler } from "#src/api.js";
 import { renderBanner } from "#src/banner.js";
 import {
   CliRuntimeError,
@@ -43,10 +44,6 @@ type CloseHook = () => void;
 const DRAIN_TIMEOUT_MS = 2000;
 
 // Hooks for later route handlers; each returns `null` until implemented.
-function createApiHandler(_sentra: Sentra, _config: StartConfig): NodeListener | null {
-  return null;
-}
-
 function createStreamHandler(
   _sentra: Sentra,
   _config: StartConfig,
@@ -177,7 +174,7 @@ async function startServer(
   const guard = createGuard({ boundHost: config.host, allowedHosts: config.allowedHosts });
   const routes = {
     ingest: toNodeListener(async (request) => sentra.handle(request)),
-    api: config.api ? createApiHandler(sentra, config) : null,
+    api: config.api ? createApiHandler({ sentra, logger }) : null,
     stream: config.api
       ? createStreamHandler(sentra, config, (hook) => {
           closeHooks.push(hook);

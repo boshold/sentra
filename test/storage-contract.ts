@@ -747,6 +747,43 @@ function runStorageContract(
         } satisfies Issue);
       });
 
+      it("keeps first/last seen and the latest event monotonic for out-of-order writes", async () => {
+        const later = await write(adapter, {
+          receivedAt: iso(T0 + HOUR),
+          items: [{ issueId: issueId(1), title: "newer", level: "fatal", platform: "python" }],
+        });
+        const delayed = await write(adapter, {
+          receivedAt: iso(T0),
+          items: [{ issueId: issueId(1), title: "older", level: "error", platform: "node" }],
+        });
+        expect(await adapter.getIssue(issueId(1))).toMatchObject({
+          count: 2,
+          firstSeenAt: delayed.envelope.receivedAt,
+          lastSeenAt: later.envelope.receivedAt,
+          lastItemId: only(later.items).id,
+          title: "newer",
+          level: "fatal",
+          platform: "python",
+        });
+      });
+
+      it("breaks receipt-time ties by item id", async () => {
+        const high = "0199a0b0-0000-7000-8000-ffffffffff02";
+        const low = "0199a0b0-0000-7000-8000-ffffffffff01";
+        await write(adapter, { items: [{ id: high, issueId: issueId(1), title: "high" }] });
+        await write(adapter, { items: [{ id: low, issueId: issueId(1), title: "low" }] });
+        expect(await adapter.getIssue(issueId(1))).toMatchObject({
+          lastItemId: high,
+          title: "high",
+        });
+        await write(adapter, {
+          items: [
+            { id: "0199a0b0-0000-7000-8000-ffffffffff03", issueId: issueId(1), title: "top" },
+          ],
+        });
+        expect(await adapter.getIssue(issueId(1))).toMatchObject({ title: "top" });
+      });
+
       it("derives services from items", async () => {
         await write(adapter, { scope: { service: "web" }, items: [{ issueId: issueId(1) }] });
         await write(adapter, { scope: { service: "api" }, items: [{ issueId: issueId(1) }] });

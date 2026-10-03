@@ -472,12 +472,19 @@ class MemoryStorage implements StorageAdapter {
       return { id: entry.id, isNew: true, count: 1 };
     }
     existing.count += 1;
-    existing.lastSeenAt = entry.seenAt;
-    existing.lastItemId = entry.itemId;
-    existing.title = entry.title;
-    existing.culprit = entry.culprit;
-    existing.level = entry.level;
-    existing.platform = entry.platform;
+    // Writes can finish out of receipt order: keep first/last seen and the latest event monotonic.
+    if (Date.parse(entry.seenAt) < Date.parse(existing.firstSeenAt)) {
+      existing.firstSeenAt = entry.seenAt;
+    }
+    const latest = { receivedAt: existing.lastSeenAt, id: existing.lastItemId };
+    if (byReceiptAsc({ receivedAt: entry.seenAt, id: entry.itemId }, latest) > 0) {
+      existing.lastSeenAt = entry.seenAt;
+      existing.lastItemId = entry.itemId;
+      existing.title = entry.title;
+      existing.culprit = entry.culprit;
+      existing.level = entry.level;
+      existing.platform = entry.platform;
+    }
     return { id: entry.id, isNew: false, count: existing.count };
   }
 

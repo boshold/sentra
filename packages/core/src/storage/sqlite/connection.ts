@@ -5,6 +5,13 @@ function insertSql(table: string, columns: readonly string[]): string {
   return `INSERT INTO ${table} (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`;
 }
 
+/** Writes can finish out of receipt order: latest-event fields follow receipt time, then item id. */
+function latestOnly(column: string): string {
+  return `${column} = CASE WHEN excluded.last_seen_at > last_seen_at
+    OR (excluded.last_seen_at = last_seen_at AND excluded.last_item_id > last_item_id)
+    THEN excluded.${column} ELSE ${column} END`;
+}
+
 export function createStatements(driver: SqliteDriver) {
   return {
     touchScope: driver.prepare(
@@ -22,9 +29,11 @@ export function createStatements(driver: SqliteDriver) {
       `INSERT INTO issues (id, project, session, kind, fingerprint, fingerprint_hash, title, culprit, level, platform,
                            count, first_seen_at, last_seen_at, last_item_id)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET count = count + 1, last_seen_at = excluded.last_seen_at,
-         last_item_id = excluded.last_item_id, title = excluded.title, culprit = excluded.culprit,
-         level = excluded.level, platform = excluded.platform`,
+       ON CONFLICT(id) DO UPDATE SET count = count + 1,
+         first_seen_at = MIN(first_seen_at, excluded.first_seen_at),
+         last_seen_at = MAX(last_seen_at, excluded.last_seen_at),
+         ${latestOnly("last_item_id")}, ${latestOnly("title")}, ${latestOnly("culprit")},
+         ${latestOnly("level")}, ${latestOnly("platform")}`,
     ),
     selectItem: driver.prepare("SELECT * FROM items WHERE id = ?"),
     selectItemByEventId: driver.prepare(

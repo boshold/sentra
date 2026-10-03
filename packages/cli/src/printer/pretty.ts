@@ -8,8 +8,8 @@ import {
   formatScope,
   renderFrameLines,
   sanitizeText,
-} from "@bosdev/sentra-core";
-import type { Frame, Item, Level, LiveEvent, Scope } from "@bosdev/sentra-core";
+} from "@boshold/sentra-core";
+import type { Frame, Item, Level, LiveEvent, Scope } from "@boshold/sentra-core";
 
 interface PrettyOptions {
   color: boolean;

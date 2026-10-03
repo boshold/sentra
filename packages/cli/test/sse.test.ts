@@ -1,7 +1,7 @@
 import { ServerResponse, createServer } from "node:http";
 import { PassThrough } from "node:stream";
 
-import type { LiveEvent } from "@bosdev/sentra-core";
+import type { LiveEvent } from "@boshold/sentra-core";
 
 import { resolveStartConfig } from "#src/config.js";
 import { startServer } from "#src/server.js";

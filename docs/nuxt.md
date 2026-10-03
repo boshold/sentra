@@ -67,7 +67,7 @@ Sentra needs the app directory as a source root to map server frames. The CLI us
 
 ```ts
 import http from "node:http";
-import { createSentra, memoryStorage, toNodeListener } from "@bosdev/sentra-core";
+import { createSentra, memoryStorage, toNodeListener } from "@boshold/sentra-core";
 
 const sentra = await createSentra({
   storage: memoryStorage(),

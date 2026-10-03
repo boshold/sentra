@@ -1,6 +1,6 @@
 import { PassThrough } from "node:stream";
 
-import type { Item, LiveEvent } from "@bosdev/sentra-core";
+import type { Item, LiveEvent } from "@boshold/sentra-core";
 
 import { formatLiveEvent } from "#src/printer/pretty.js";
 

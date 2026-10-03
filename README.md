@@ -6,17 +6,17 @@ Not included: the Sentry `/store/` endpoint, reprocessing, forwarding to Spotlig
 
 ## Packages
 
-| Package               | Role                                                                                                                         | Docs                                     |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| `@bosdev/sentra-core` | Library: ingest handler, parser, issues, source maps, memory/SQLite storage, query API, live subscribe, MCP tool definitions | [packages/core](packages/core/README.md) |
-| `@bosdev/sentra-cli`  | Standalone server `sentra`: HTTP server, startup banner, live terminal output, HTTP query API, SSE stream, MCP endpoint      | [packages/cli](packages/cli/README.md)   |
+| Package                | Role                                                                                                                         | Docs                                     |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `@boshold/sentra-core` | Library: ingest handler, parser, issues, source maps, memory/SQLite storage, query API, live subscribe, MCP tool definitions | [packages/core](packages/core/README.md) |
+| `@boshold/sentra-cli`  | Standalone server `sentra`: HTTP server, startup banner, live terminal output, HTTP query API, SSE stream, MCP endpoint      | [packages/cli](packages/cli/README.md)   |
 
 ## Quick start (CLI)
 
 ```bash
-pnpx @bosdev/sentra-cli
+pnpx @boshold/sentra-cli
 # or
-npx @bosdev/sentra-cli
+npx @boshold/sentra-cli
 ```
 
 Startup banner:
@@ -115,7 +115,7 @@ The core never listens on a port itself. The host owns the HTTP server and passe
 
 ```ts
 import { createServer } from "node:http";
-import { createSentra, sqliteStorage, toNodeListener } from "@bosdev/sentra-core";
+import { createSentra, sqliteStorage, toNodeListener } from "@boshold/sentra-core";
 import { McpServer } from "@modelcontextprotocol/server";
 
 const sentra = await createSentra({

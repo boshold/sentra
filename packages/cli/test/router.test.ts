@@ -2,8 +2,8 @@ import { createServer } from "node:http";
 import type { Server, ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 
-import { createSentra, memoryStorage, toNodeListener } from "@bosdev/sentra-core";
-import type { Sentra } from "@bosdev/sentra-core";
+import { createSentra, memoryStorage, toNodeListener } from "@boshold/sentra-core";
+import type { Sentra } from "@boshold/sentra-core";
 
 import { createGuard } from "#src/guard.js";
 import { createRouter, sendError, sendJson } from "#src/router.js";

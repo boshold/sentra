@@ -1,4 +1,4 @@
-import { parseAllowedHost } from "@bosdev/sentra-core";
+import { parseAllowedHost } from "@boshold/sentra-core";
 import {
   localhostAllowedHostnames,
   validateHostHeader,

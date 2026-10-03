@@ -97,7 +97,7 @@ for (const target of TARGETS) {
     format: "esm",
     packages: "external",
     // Tsconfig `paths` map workspace packages to sources; keep them external like other packages.
-    external: ["@bosdev/*"],
+    external: ["@boshold/*"],
     banner: target.banner ? { js: target.banner } : undefined,
     define: { __VERSION__: JSON.stringify(version) },
   });

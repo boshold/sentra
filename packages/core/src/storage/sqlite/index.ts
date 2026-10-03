@@ -1,16 +1,28 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 
-import { literal, strictObject, string } from "zod";
+import { int, literal, object, strictObject, string } from "zod";
 
 import { SentraConfigError, SentraStorageError } from "#src/errors.js";
 import { loadDriver } from "#src/storage/sqlite/driver/load.js";
-import type { SqliteDriver, SqliteDriverOption } from "#src/storage/sqlite/driver/types.js";
+import { withWriteTransaction } from "#src/storage/sqlite/driver/transaction.js";
+import type {
+  SqliteDriver,
+  SqliteDriverOption,
+  SqliteStatement,
+} from "#src/storage/sqlite/driver/types.js";
 import {
   assertSupportedVersion,
   readUserVersion,
   runMigrations,
 } from "#src/storage/sqlite/migrations.js";
+import {
+  ENVELOPE_COLUMNS,
+  ITEM_COLUMNS,
+  envelopeToRow,
+  itemToRow,
+  toMs,
+} from "#src/storage/sqlite/rows.js";
 import { applyPragmas } from "#src/storage/sqlite/schema.js";
 import type {
   IngestBatch,
@@ -38,13 +50,100 @@ const optionsSchema = strictObject({
   driver: literal(["auto", "better-sqlite3", "node"]).default("auto"),
 });
 
+const issueCountRowSchema = object({ count: int() });
+
+function insertSql(table: string, columns: readonly string[]): string {
+  return `INSERT INTO ${table} (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`;
+}
+
+function createStatements(driver: SqliteDriver) {
+  return {
+    touchScope: driver.prepare(
+      `INSERT INTO scopes (project, session, service, first_seen_at, last_seen_at, item_count)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(project, session, service) DO UPDATE SET
+         last_seen_at = MAX(last_seen_at, excluded.last_seen_at),
+         item_count = item_count + excluded.item_count`,
+    ),
+    insertEnvelope: driver.prepare(insertSql("envelopes", ENVELOPE_COLUMNS)),
+    insertItem: driver.prepare(insertSql("items", ITEM_COLUMNS)),
+    insertBlob: driver.prepare("INSERT INTO blobs (item_id, data) VALUES (?, ?)"),
+    selectIssueCount: driver.prepare("SELECT count FROM issues WHERE id = ?"),
+    upsertIssue: driver.prepare(
+      `INSERT INTO issues (id, project, session, kind, fingerprint, fingerprint_hash, title, culprit, level, platform,
+                           count, first_seen_at, last_seen_at, last_item_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET count = count + 1, last_seen_at = excluded.last_seen_at,
+         last_item_id = excluded.last_item_id, title = excluded.title, culprit = excluded.culprit,
+         level = excluded.level, platform = excluded.platform`,
+    ),
+  } satisfies Record<string, SqliteStatement>;
+}
+
+type Statements = ReturnType<typeof createStatements>;
+
+interface Connection {
+  driver: SqliteDriver;
+  statements: Statements;
+}
+
+function writeBatch(
+  { statements }: Connection,
+  batch: IngestBatch,
+): { issues: { id: string; isNew: boolean; count: number }[] } {
+  const { envelope } = batch;
+  const receivedAt = toMs(envelope.receivedAt);
+  statements.touchScope.run(
+    envelope.scope.project,
+    envelope.scope.session,
+    envelope.scope.service,
+    receivedAt,
+    receivedAt,
+    batch.items.length,
+  );
+  const envelopeRow = envelopeToRow(envelope);
+  statements.insertEnvelope.run(...ENVELOPE_COLUMNS.map((column) => envelopeRow[column]));
+  for (const { item, blob } of batch.items) {
+    const itemRow = itemToRow(item);
+    statements.insertItem.run(...ITEM_COLUMNS.map((column) => itemRow[column]));
+    if (blob !== null) {
+      statements.insertBlob.run(item.id, blob);
+    }
+  }
+  const issues = batch.issues.map((entry) => {
+    const previous = issueCountRowSchema
+      .optional()
+      .parse(statements.selectIssueCount.get(entry.id));
+    const seenAt = toMs(entry.seenAt);
+    statements.upsertIssue.run(
+      entry.id,
+      entry.project,
+      entry.session,
+      entry.kind,
+      JSON.stringify(entry.fingerprint),
+      entry.fingerprintHash,
+      entry.title,
+      entry.culprit,
+      entry.level,
+      entry.platform,
+      seenAt,
+      seenAt,
+      entry.itemId,
+    );
+    return previous === undefined
+      ? { id: entry.id, isNew: true, count: 1 }
+      : { id: entry.id, isNew: false, count: previous.count + 1 };
+  });
+  return { issues };
+}
+
 class SqliteStorage implements StorageAdapter {
   public readonly type = "sqlite";
 
   readonly #path: string;
   readonly #driverOption: SqliteDriverOption;
-  #driver: SqliteDriver | null = null;
-  #initPromise: Promise<SqliteDriver> | null = null;
+  #connection: Connection | null = null;
+  #initPromise: Promise<Connection> | null = null;
 
   public constructor(file: string, driver: SqliteDriverOption) {
     this.#path = file === MEMORY_PATH ? file : path.resolve(file);
@@ -53,12 +152,12 @@ class SqliteStorage implements StorageAdapter {
 
   public async init(): Promise<{ driver: string | null; path: string | null }> {
     this.#initPromise ??= this.#openOnce();
-    const driver = await this.#initPromise;
+    const { driver } = await this.#initPromise;
     return { driver: driver.name, path: this.#path };
   }
 
   /** A failed attempt is forgotten so `init()` can be retried. */
-  async #openOnce(): Promise<SqliteDriver> {
+  async #openOnce(): Promise<Connection> {
     try {
       return await this.#open();
     } catch (error) {
@@ -67,7 +166,7 @@ class SqliteStorage implements StorageAdapter {
     }
   }
 
-  async #open(): Promise<SqliteDriver> {
+  async #open(): Promise<Connection> {
     if (this.#path !== MEMORY_PATH) {
       mkdirSync(path.dirname(this.#path), { recursive: true });
     }
@@ -77,25 +176,26 @@ class SqliteStorage implements StorageAdapter {
       assertSupportedVersion(readUserVersion(driver));
       applyPragmas(driver);
       runMigrations(driver);
+      this.#connection = { driver, statements: createStatements(driver) };
+      return this.#connection;
     } catch (error) {
       driver.close();
       throw error;
     }
-    this.#driver = driver;
-    return driver;
   }
 
-  #db(): SqliteDriver {
-    if (!this.#driver) {
+  #db(): Connection {
+    if (!this.#connection) {
       throw new SentraStorageError("storage_unavailable", "sqliteStorage: init() was not called");
     }
-    return this.#driver;
+    return this.#connection;
   }
 
-  public async write(_batch: IngestBatch): Promise<{
+  public async write(batch: IngestBatch): Promise<{
     issues: { id: string; isNew: boolean; count: number }[];
   }> {
-    throw this.#notImplemented("write");
+    const connection = this.#db();
+    return withWriteTransaction(connection.driver, () => writeBatch(connection, batch));
   }
 
   public async listScopes(_filter: ScopeFilter): Promise<ScopeSummary[]> {
@@ -177,9 +277,9 @@ class SqliteStorage implements StorageAdapter {
         // Reported by init().
       }
     }
-    const driver = this.#driver;
-    this.#driver = null;
-    driver?.close();
+    const connection = this.#connection;
+    this.#connection = null;
+    connection?.driver.close();
   }
 }
 

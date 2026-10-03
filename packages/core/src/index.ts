@@ -15,6 +15,23 @@ export type {
   SentraValidationErrorCode,
 } from "#src/errors.js";
 export { isIngestPath } from "#src/ingest/route.js";
+export type { SentraOptions } from "#src/options.js";
+export {
+  issueFilterSchema,
+  itemFilterSchema,
+  itemKindSchema,
+  levelSchema,
+  liveFilterSchema,
+  pageInputSchema,
+  scopeFilterSchema,
+  scopeTimeFilterSchema,
+  timeFilterSchema,
+} from "#src/query/filters.js";
+export { createSentra } from "#src/sentra.js";
+export type { Sentra, SentraBlob, SentraInfo, SentraQuery } from "#src/sentra.js";
+export { memoryStorage } from "#src/storage/memory/index.js";
+export type { MemoryStorageOptions } from "#src/storage/memory/index.js";
+export type * from "#src/storage/types.js";
 export type * from "#src/types.js";
 export { ITEM_KINDS, LEVELS } from "#src/types.js";
 export { VERSION } from "#src/util/version.js";

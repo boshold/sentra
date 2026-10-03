@@ -1,5 +1,7 @@
 // Public data model (40_data_model.md) and filter types (50_api.md).
 
+import type { ZodObject } from "zod";
+
 export interface Scope {
   project: string;
   session: string;
@@ -300,4 +302,16 @@ export interface SentraLogger {
   info(msg: string, meta?: Record<string, unknown>): void;
   warn(msg: string, meta?: Record<string, unknown>): void;
   error(msg: string, meta?: Record<string, unknown>): void;
+}
+
+export interface SentraToolDefinition {
+  name: string;
+  title: string;
+  description: string;
+  /** Full zod v4 object schema. */
+  inputSchema: ZodObject;
+  annotations: { readOnlyHint: boolean };
+  handler(
+    input: unknown,
+  ): Promise<{ content: { type: "text"; text: string }[]; isError?: boolean }>;
 }

@@ -3,6 +3,7 @@ import {
   createStderrLogger,
   defaultDbPath,
   isLoopbackHost,
+  isUnspecifiedHost,
   lanAddresses,
   resolveStartConfig,
   runCli,
@@ -136,6 +137,14 @@ describe("defaultDbPath", () => {
 describe("runCli flag validation", () => {
   it.each([
     [["--port", "abc"], "--port"],
+    [["--host", "http://localhost"], "--host"],
+    [["--host", "localhost:8969"], "--host"],
+    [["--host", "127.0.0.1:80"], "--host"],
+    [["--host", "a b"], "--host"],
+    [["--host", "host/path"], "--host"],
+    [["--host", "user@host"], "--host"],
+    [["--host", ""], "--host"],
+    [["--host", "[::1]:80"], "--host"],
     [["--port", "70000"], "--port"],
     [["--port", "1.5"], "--port"],
     [["--storage", "pg"], "--storage"],
@@ -247,9 +256,42 @@ describe("isLoopbackHost", () => {
     ["0.0.0.0", false],
     ["192.168.1.10", false],
     ["::", false],
+    ["0:0:0:0:0:0:0:1", true],
+    ["0x7f.1", true],
     ["localhost.example.com", false],
   ])("%s → %s", (host, expected) => {
     expect(isLoopbackHost(host)).toBe(expected);
+  });
+});
+
+describe("host flag", () => {
+  it.each([
+    ["localhost", "localhost"],
+    ["0.0.0.0", "0.0.0.0"],
+    ["::", "::"],
+    ["::1", "::1"],
+    ["[::1]", "::1"],
+    ["fe80::1", "fe80::1"],
+    ["dev.local", "dev.local"],
+  ])("accepts %s", (host, expected) => {
+    expect(resolveStartConfig({ host }, {}, "/w").host).toBe(expected);
+  });
+});
+
+describe("isUnspecifiedHost", () => {
+  it.each([
+    ["0.0.0.0", true],
+    ["::", true],
+    ["[::]", true],
+    ["::0", true],
+    ["0:0:0:0:0:0:0:0", true],
+    ["0", true],
+    ["::1", false],
+    ["127.0.0.1", false],
+    ["192.168.1.10", false],
+    ["localhost", false],
+  ])("%s → %s", (host, expected) => {
+    expect(isUnspecifiedHost(host)).toBe(expected);
   });
 });
 
@@ -281,6 +323,10 @@ describe("toSentraOptions", () => {
     const hosts = wildcard.sourceMaps?.allowedHosts ?? [];
     expect(hosts).toEqual(expect.arrayContaining(["cdn.local", ...lanAddresses()]));
     expect(hosts).not.toContain("0.0.0.0");
+    for (const host of ["::", "::0", "0:0:0:0:0:0:0:0", "[::]"]) {
+      const v6 = toSentraOptions(config({ host })).sourceMaps?.allowedHosts ?? [];
+      expect(v6).toEqual([...new Set(lanAddresses())]);
+    }
     const bound = toSentraOptions(config({ host: "192.168.77.5" }));
     expect(bound.sourceMaps?.allowedHosts).toContain("192.168.77.5");
     const loopback = toSentraOptions(config({ sourceMapHost: ["cdn.local"] }));

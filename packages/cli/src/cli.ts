@@ -136,6 +136,27 @@ const publicUrlSchema = string().refine(isPublicUrl, {
   message: "expected an http(s) URL without path, query or credentials",
 });
 
+/** Canonical hostname as URL parsing yields it (`::0` → `[::]`, `0x7f.1` → `127.0.0.1`); `null` if invalid. */
+function canonicalHost(host: string): string | null {
+  const bare = host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
+  if (bare === "" || /[\s/\\@?#[\]]/.test(bare)) {
+    return null;
+  }
+  if (bare.includes(":")) {
+    return URL.parse(`http://[${bare}]/`)?.hostname ?? null;
+  }
+  const hostname = URL.parse(`http://${bare}/`)?.hostname;
+  return hostname === undefined || hostname === "" ? null : hostname;
+}
+
+const hostSchema = string()
+  .refine((value) => canonicalHost(value) !== null, {
+    message: "expected a hostname or IP address without scheme, port or path",
+  })
+  .transform((value) =>
+    value.startsWith("[") && value.endsWith("]") ? value.slice(1, -1) : value,
+  );
+
 const segmentSchema = string().refine(isScopeSegment, {
   message: "expected 1-64 characters of A-Z a-z 0-9 . _ -",
 });
@@ -184,7 +205,7 @@ const showSchema = string().transform((value, ctx): ItemKind[] | "all" => {
 });
 
 const flagsSchema = object({
-  host: string().min(1).default("127.0.0.1"),
+  host: hostSchema.default("127.0.0.1"),
   port: number().int().min(0).max(65_535).default(DEFAULT_PORT),
   publicUrl: publicUrlSchema.optional(),
   storage: zodEnum(["memory", "sqlite"]).default("sqlite"),
@@ -291,23 +312,26 @@ function lanAddresses(): string[] {
 }
 
 function isLoopbackHost(host: string): boolean {
-  const value = host.toLowerCase();
+  const canonical = canonicalHost(host);
   return (
-    value === "localhost" ||
-    value === "::1" ||
-    value === "[::1]" ||
-    /^127(?:\.\d{1,3}){3}$/.test(value)
+    canonical === "localhost" ||
+    canonical === "[::1]" ||
+    /^127(?:\.\d{1,3}){3}$/.test(canonical ?? "")
   );
 }
 
-const WILDCARD_HOSTS = new Set(["0.0.0.0", "::", "[::]"]);
+/** `0.0.0.0` or `::` in any spelling. */
+function isUnspecifiedHost(host: string): boolean {
+  const canonical = canonicalHost(host);
+  return canonical === "0.0.0.0" || canonical === "[::]";
+}
 
 /** `--source-map-host` values; for a non-loopback bind also the bound host and the LAN IPs. */
 function sourceMapHosts(config: StartConfig): string[] {
   if (isLoopbackHost(config.host)) {
     return [...config.sourceMapHosts];
   }
-  const bound = WILDCARD_HOSTS.has(config.host) ? [] : [config.host];
+  const bound = isUnspecifiedHost(config.host) ? [] : [config.host];
   return [...new Set([...config.sourceMapHosts, ...bound, ...lanAddresses()])];
 }
 
@@ -447,6 +471,7 @@ export {
   createStderrLogger,
   defaultDbPath,
   isLoopbackHost,
+  isUnspecifiedHost,
   lanAddresses,
   resolveStartConfig,
   runCli,

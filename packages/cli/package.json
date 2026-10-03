@@ -36,7 +36,7 @@
   "dependencies": {
     "@bosdev/sentra-core": "workspace:*",
     "cleye": "^2.7.0",
-    "zod": "^4.6.5"
+    "zod": "^4.4.3"
   },
   "engines": {
     "node": ">=22.15"

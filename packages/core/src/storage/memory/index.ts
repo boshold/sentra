@@ -1,6 +1,7 @@
 import { DEFAULT_MAX_ITEMS } from "#src/defaults.js";
 import { SentraConfigError } from "#src/errors.js";
 import { issueMetadataOf } from "#src/grouping/metadata.js";
+import type { IssueMetadata } from "#src/grouping/metadata.js";
 import { encodeCursor, encodeIssueCursor, parseIssueCursor } from "#src/query/cursor.js";
 import {
   isKeptEnvelope,
@@ -119,6 +120,13 @@ function byReceiptAsc(
   b: { receivedAt: string; id: string },
 ): number {
   return Date.parse(a.receivedAt) - Date.parse(b.receivedAt) || byIdAsc(a, b);
+}
+
+/** The newest of receipt-sorted items with its issue metadata, if any. */
+function latestEventOf(sorted: readonly Item[]): { item: Item; metadata: IssueMetadata } | null {
+  const item = sorted.at(-1);
+  const metadata = item === undefined ? null : issueMetadataOf(item);
+  return item === undefined || metadata === null ? null : { item, metadata };
 }
 
 function pageById<T extends { id: string }>(sorted: T[], page: ResolvedPage): Page<T> {
@@ -587,24 +595,28 @@ class MemoryStorage implements StorageAdapter {
     }
   }
 
-  #recomputeIssue(issueId: string): void {
-    const issue = this.#issues.get(issueId);
-    const items = [...(this.#issueItems.get(issueId) ?? [])]
+  /** Surviving items of an issue, oldest receipt first (then id). */
+  #survivorsOf(issueId: string): Item[] {
+    return [...(this.#issueItems.get(issueId) ?? [])]
       .map((id) => this.#items.get(id))
       .filter((item): item is Item => item !== undefined)
       .toSorted(byReceiptAsc);
-    const last = items.at(-1);
-    const metadata = last === undefined ? null : issueMetadataOf(last);
-    if (issue === undefined || last === undefined || metadata === null) {
+  }
+
+  #recomputeIssue(issueId: string): void {
+    const issue = this.#issues.get(issueId);
+    const survivors = this.#survivorsOf(issueId);
+    const latest = latestEventOf(survivors);
+    if (issue === undefined || latest === null) {
       this.#dropEmptyIssues([issueId]);
       return;
     }
-    const seen = items.map((item) => Date.parse(item.receivedAt));
-    issue.count = items.length;
+    const seen = survivors.map((item) => Date.parse(item.receivedAt));
+    issue.count = survivors.length;
     issue.firstSeenAt = new Date(Math.min(...seen)).toISOString();
     issue.lastSeenAt = new Date(Math.max(...seen)).toISOString();
-    issue.lastItemId = last.id;
-    Object.assign(issue, metadata);
+    issue.lastItemId = latest.item.id;
+    Object.assign(issue, latest.metadata);
   }
 
   #boundFailedEnvelopes(): void {
@@ -636,17 +648,12 @@ class MemoryStorage implements StorageAdapter {
     if (issue === undefined || this.#items.has(issue.lastItemId)) {
       return;
     }
-    const latest = [...(this.#issueItems.get(issueId) ?? [])]
-      .map((id) => this.#items.get(id))
-      .filter((item): item is Item => item !== undefined)
-      .toSorted(byReceiptAsc)
-      .at(-1);
-    const metadata = latest === undefined ? null : issueMetadataOf(latest);
-    if (latest === undefined || metadata === null) {
+    const latest = latestEventOf(this.#survivorsOf(issueId));
+    if (latest === null) {
       return;
     }
-    issue.lastItemId = latest.id;
-    Object.assign(issue, metadata);
+    issue.lastItemId = latest.item.id;
+    Object.assign(issue, latest.metadata);
   }
 }
 

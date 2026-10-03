@@ -17,6 +17,7 @@ import {
   resolveScopeFilter,
   resolveScopeTimeFilter,
 } from "#src/query/filters.js";
+import { createRetention } from "#src/retention.js";
 import type {
   Envelope,
   Issue,
@@ -121,6 +122,19 @@ async function createSentraWith(
   const options = resolveOptions(input);
   const { storage, logger } = options;
   const storageInfo = await storage.init();
+  const retention = createRetention({
+    storage,
+    maxIdleMs: options.retention.maxIdleMs,
+    noiseMaxAgeMs: options.retention.noiseMaxAgeMs,
+    logger,
+  });
+  try {
+    await retention.prune();
+  } catch (error) {
+    await storage.close();
+    throw error;
+  }
+  retention.start();
   const bus = createLiveBus(logger);
   const sourceRoots = new Set(options.sourceMaps.sourceRoots);
   const onEnvelope = createPipeline({
@@ -183,7 +197,7 @@ async function createSentraWith(
     async clear(filter) {
       return { itemsDeleted: await storage.deleteItems(resolveItemFilter(filter)) };
     },
-    prune: async () => Promise.resolve({ sessionsDeleted: 0, itemsDeleted: 0 }),
+    prune: async () => retention.prune(),
     vacuum: async () => storage.vacuum(),
     mcpTools: () => [],
     info: () => ({
@@ -193,6 +207,7 @@ async function createSentraWith(
     }),
     async close() {
       closed ??= (async () => {
+        retention.stop();
         bus.clear();
         await storage.close();
       })();

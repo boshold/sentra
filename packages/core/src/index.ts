@@ -15,6 +15,7 @@ export type {
   SentraValidationErrorCode,
 } from "#src/errors.js";
 export { isIngestPath } from "#src/ingest/route.js";
+export { toNodeListener } from "#src/node/listener.js";
 export type { SentraOptions } from "#src/options.js";
 export {
   issueFilterSchema,

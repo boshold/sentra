@@ -165,6 +165,11 @@ function createIngestHandler(
       if (error instanceof SentraError && status !== undefined) {
         return errorResponse(status, error.code, error.message);
       }
+      if (request.signal.aborted) {
+        // The client is gone; nobody reads this response.
+        logger.debug(`client aborted request: ${messageOf(error)}`, { error });
+        return errorResponse(499, "client_closed_request", "client closed the request");
+      }
       logger.error(`ingest failed: ${messageOf(error)}`, { error });
       return errorResponse(500, "internal_error", "internal error");
     }

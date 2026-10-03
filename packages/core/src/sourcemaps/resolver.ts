@@ -23,6 +23,8 @@ import { createBudget, createTraceMap, mapFrame } from "#src/sourcemaps/mapper.j
 import type { Budget } from "#src/sourcemaps/mapper.js";
 import { classifyLocation, frameLocation } from "#src/sourcemaps/paths.js";
 import type { EventData, Frame, Item, SentraLogger, SourceMapInfo } from "#src/types.js";
+import { createLimiter } from "#src/util/limit.js";
+import type { Limiter } from "#src/util/limit.js";
 
 interface SourceMapResolverOptions {
   /** Extra hosts; loopback defaults are always added. */
@@ -57,6 +59,9 @@ interface ResolveContext {
   budget: Budget;
   deadline: AbortSignal;
   realRoots: string[];
+  /** Locations admitted as candidates, in frame order; capped at `MAX_CANDIDATES`. */
+  admitted: Set<string>;
+  limit: Limiter;
   candidates: Map<string, Promise<Candidate | null>>;
   loads: Map<string, Promise<CachedSource>>;
   sources: Map<string, Promise<string | null>>;
@@ -68,6 +73,10 @@ type FrameOutcome =
   | { kind: "error"; frame: Frame; reason: string };
 
 const MAX_ERRORS = 50;
+/** Per envelope: bounds the work an untrusted sender can trigger. */
+const MAX_CONCURRENT_LOADS = 8;
+const MAX_CANDIDATES = 50;
+const BUDGET_EXCEEDED: LoadResult = { status: "failed", reason: "budget_exceeded" };
 const NOT_APPLICABLE: SourceMapInfo = {
   status: "not_applicable",
   mappedFrames: 0,
@@ -144,6 +153,14 @@ function createSourceMapResolver(options: SourceMapResolverOptions): SourceMapRe
   const cache = createSourceMapCache();
   const now = options.now ?? Date.now;
 
+  function isPossibleCandidate(location: string): boolean {
+    const classified = classifyLocation(location);
+    return (
+      classified.kind === "file" ||
+      (classified.kind === "http" && isAllowedUrl(classified.url, hostSet))
+    );
+  }
+
   async function classify(location: string, ctx: ResolveContext): Promise<Candidate | null> {
     const classified = classifyLocation(location);
     if (classified.kind === "http") {
@@ -190,14 +207,16 @@ function createSourceMapResolver(options: SourceMapResolverOptions): SourceMapRe
       cache.delete(candidate.key);
       return null;
     }
-    if (
-      cached.validators === null ||
-      candidate.isUnchanged === undefined ||
-      ctx.budget.exceeded()
-    ) {
+    const { validators } = cached;
+    const { isUnchanged } = candidate;
+    if (validators === null || isUnchanged === undefined) {
       return cached.source;
     }
-    if (await candidate.isUnchanged(cached.validators)) {
+    // Out of budget, a possibly stale map beats none.
+    const unchanged = await ctx.limit(async () =>
+      ctx.budget.exceeded() ? true : isUnchanged(validators),
+    );
+    if (unchanged) {
       return cached.source;
     }
     cache.delete(candidate.key);
@@ -209,14 +228,14 @@ function createSourceMapResolver(options: SourceMapResolverOptions): SourceMapRe
     if (cached !== null) {
       return cached;
     }
-    if (ctx.budget.exceeded()) {
-      return { result: { status: "failed", reason: "budget_exceeded" }, traceMap: null };
-    }
-    const loaded = await candidate.load();
+    // Checked when the queued job starts, not when it was queued.
+    const loaded = await ctx.limit(async () =>
+      ctx.budget.exceeded() ? BUDGET_EXCEEDED : candidate.load(),
+    );
     // A fetch aborted by the shared per-envelope deadline ran out of budget, not of fetch time.
     const result: LoadResult =
       loaded.status === "failed" && loaded.reason === "timeout" && ctx.deadline.aborted
-        ? { status: "failed", reason: "budget_exceeded" }
+        ? BUDGET_EXCEEDED
         : loaded;
     const entry = await toCached(result);
     if (isCacheable(entry.result)) {
@@ -227,8 +246,15 @@ function createSourceMapResolver(options: SourceMapResolverOptions): SourceMapRe
 
   async function resolveFrame(frame: Frame, ctx: ResolveContext): Promise<FrameOutcome> {
     const location = frameLocation(frame);
-    if (location === null) {
+    if (location === null || !isPossibleCandidate(location)) {
       return { kind: "none" };
+    }
+    // Synchronous, so admission follows frame order.
+    if (!ctx.admitted.has(location)) {
+      if (ctx.admitted.size >= MAX_CANDIDATES) {
+        return { kind: "error", reason: "too_many_candidates", frame };
+      }
+      ctx.admitted.add(location);
     }
     const candidate = await memo(ctx.candidates, location, async () => classify(location, ctx));
     if (candidate === null) {
@@ -297,8 +323,10 @@ function createSourceMapResolver(options: SourceMapResolverOptions): SourceMapRe
           return outcome.frame;
         }
         const absPath = frameLocation(outcome.frame) ?? "";
-        const errorKey = `${absPath}\n${outcome.reason}`;
-        if (!seen.has(errorKey) && errors.length < MAX_ERRORS) {
+        // One entry for the capped frames, kept even when the list is full.
+        const capped = outcome.reason === "too_many_candidates";
+        const errorKey = capped ? outcome.reason : `${absPath}\n${outcome.reason}`;
+        if (!seen.has(errorKey) && (capped || errors.length < MAX_ERRORS)) {
           seen.add(errorKey);
           errors.push({ absPath, reason: outcome.reason });
         }
@@ -329,6 +357,8 @@ function createSourceMapResolver(options: SourceMapResolverOptions): SourceMapRe
       budget,
       deadline: AbortSignal.timeout(options.budgetMs),
       realRoots: await resolveRoots([...roots]),
+      admitted: new Set(),
+      limit: createLimiter(MAX_CONCURRENT_LOADS),
       candidates: new Map(),
       loads: new Map(),
       sources: new Map(),

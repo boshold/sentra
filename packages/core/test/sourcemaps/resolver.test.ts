@@ -356,6 +356,68 @@ describe("resolveEvents", () => {
     });
   });
 
+  describe("per-envelope limits", () => {
+    afterEach(() => {
+      vi.mocked(loadHttpSourceMap).mockReset();
+    });
+
+    function trackConcurrency(onFinish: () => void = () => undefined) {
+      const stats = { active: 0, max: 0, calls: 0 };
+      vi.mocked(loadHttpSourceMap).mockImplementation(async () => {
+        stats.calls += 1;
+        stats.active += 1;
+        stats.max = Math.max(stats.max, stats.active);
+        await new Promise<void>((resolve) => {
+          setImmediate(resolve);
+        });
+        stats.active -= 1;
+        onFinish();
+        return { status: "failed", reason: "no_source_map" };
+      });
+      return stats;
+    }
+
+    function urls(prefix: string, length: number): Frame[] {
+      return Array.from({ length }, (_, index) => frame(`${origin}/${prefix}-${index}.js`));
+    }
+
+    it("runs at most 8 fetches at once and loads at most 50 candidates", async () => {
+      const stats = trackConcurrency();
+      const data = event(urls("many", 1000));
+      await resolver().resolveEvents([data]);
+      expect(stats.max).toBe(8);
+      expect(stats.calls).toBe(50);
+      expect(data.sourceMaps).toMatchObject({
+        status: "none",
+        candidateFrames: 1000,
+        mappedFrames: 0,
+      });
+    });
+
+    it("reports too_many_candidates once, for the first frame beyond the cap", async () => {
+      trackConcurrency();
+      const data = event(urls("cap", 52));
+      await resolver().resolveEvents([data]);
+      const { errors } = data.sourceMaps;
+      expect(errors).toHaveLength(51);
+      expect(errors.slice(0, 50).every((error) => error.reason === "no_source_map")).toBe(true);
+      expect(errors[50]).toEqual({ absPath: `${origin}/cap-50.js`, reason: "too_many_candidates" });
+    });
+
+    it("checks the budget when a queued fetch starts", async () => {
+      let clock = 0;
+      vi.spyOn(performance, "now").mockImplementation(() => clock);
+      const stats = trackConcurrency(() => {
+        clock = 10_000;
+      });
+      const data = event(urls("budget", 20));
+      await resolver().resolveEvents([data]);
+      expect(stats.calls).toBe(8);
+      const reasons = data.sourceMaps.errors.map((error) => error.reason);
+      expect(reasons.filter((reason) => reason === "budget_exceeded")).toHaveLength(12);
+    });
+  });
+
   it("dedupes loads across events of one envelope", async () => {
     const url = `${origin}/mod-multi.js`;
     await resolver().resolveEvents([event([frame(url, 2)]), event([frame(url, 2)])]);

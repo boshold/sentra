@@ -160,6 +160,7 @@ describe("runCli flag validation", () => {
     [["--format", "xml"], "--format"],
     [["--log-level", "trace"], "--log-level"],
     [["--project", "a b"], "--project"],
+    [["--session", ".."], "--session"],
     [["--service", "a/b"], "--service"],
     [["--public-url", "nope"], "--public-url"],
     [["--public-url", "http://localhost:8969/path"], "--public-url"],
@@ -232,6 +233,8 @@ describe("sentra dsn", () => {
 
   it.each([
     [["dsn", "--project", "a/b"]],
+    [["dsn", "--project", "app", "--session", ".."]],
+    [["dsn", "--service", "."]],
     [["dsn", "--public-url", "ftp://x"]],
     [["dsn", "--port", "1"]],
     [["dsn", "x"]],

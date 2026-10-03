@@ -8,7 +8,7 @@ Apps keep the official Sentry SDKs and only get a Sentra DSN:
 http://sentra@<host>:<port>/[project/][session/][service/]1
 ```
 
-A missing segment becomes `default`, `_` skips a middle segment, segments match `[A-Za-z0-9._-]{1,64}`. The public key and project id are ignored.
+A missing segment becomes `default`, `_` skips a middle segment, segments match `[A-Za-z0-9._-]{1,64}` and must not be `.` or `..`. The public key and project id are ignored.
 
 For a ready-made server with terminal output, HTTP API and MCP endpoint, use [`@bosdev/sentra-cli`](https://github.com/boshold/sentra/tree/main/packages/cli).
 

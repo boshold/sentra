@@ -71,8 +71,24 @@ describe("buildDsn", () => {
     );
   });
 
-  it.each(["my app", "", "a".repeat(65)])("throws SentraScopeError for segment %j", (project) => {
-    expect(() => buildDsn({ baseUrl: BASE, project })).toThrow(SentraScopeError);
+  it.each(["my app", "", "a".repeat(65), ".", ".."])(
+    "throws SentraScopeError for segment %j",
+    (project) => {
+      expect(() => buildDsn({ baseUrl: BASE, project })).toThrow(SentraScopeError);
+    },
+  );
+
+  it.each([{ session: ".." }, { session: "." }, { service: ".." }])(
+    "rejects dot segments in any position: %j",
+    (input) => {
+      expect(() => buildDsn({ baseUrl: BASE, project: "app", ...input })).toThrow(SentraScopeError);
+    },
+  );
+
+  it("still accepts segments containing dots", () => {
+    expect(buildDsn({ baseUrl: BASE, project: "my.app", session: "...", service: ".x" })).toBe(
+      `http://sentra@${new URL(BASE).host}/my.app/.../.x/1`,
+    );
   });
 
   it.each(buildCases)("round trips through parseDsnScope: %s", (_name, input) => {

@@ -106,7 +106,7 @@ const hostSchema = string()
   );
 
 const segmentSchema = string().refine(isScopeSegment, {
-  message: "expected 1-64 characters of A-Z a-z 0-9 . _ -",
+  message: "expected 1-64 characters of A-Z a-z 0-9 . _ - (not . or ..)",
 });
 
 const hostEntrySchema = string().refine((value) => parseAllowedHost(value) !== null, {

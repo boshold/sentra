@@ -90,6 +90,12 @@ describe("scopeFromSegments", () => {
     });
   });
 
+  it.each([".", ".."])("rejects the dot segment %j with invalid_scope", (segment) => {
+    expect(() => scopeFromSegments(["app", segment])).toThrow(
+      expect.objectContaining({ code: "invalid_scope" }),
+    );
+  });
+
   it("names the offending segment", () => {
     expect(() => scopeFromSegments(["ok", "my app"])).toThrow('invalid scope segment "my app"');
   });

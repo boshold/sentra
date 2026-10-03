@@ -6,21 +6,21 @@ const SEGMENT_RE = /^[A-Za-z0-9._-]{1,64}$/;
 const INGEST_SUFFIX_RE = /(?:^|\/)api\/(?<projectId>\d+)\/envelope\/?$/;
 const MAX_SEGMENTS = 3;
 
+/** Whether `value` is a valid scope segment: `[A-Za-z0-9._-]{1,64}`, but not `.` or `..` (URL parsing drops them). */
+function isScopeSegment(value: string): boolean {
+  return SEGMENT_RE.test(value) && value !== "." && value !== "..";
+}
+
 function normalizeSegment(segment: string | undefined): string {
   if (segment === undefined || segment === "_") {
     return DEFAULT_SEGMENT;
   }
-  if (!SEGMENT_RE.test(segment)) {
+  if (!isScopeSegment(segment)) {
     throw new SentraScopeError(`invalid scope segment ${JSON.stringify(segment)}`, {
       details: { segment },
     });
   }
   return segment;
-}
-
-/** Whether `value` is a valid scope segment (`[A-Za-z0-9._-]{1,64}`). */
-export function isScopeSegment(value: string): boolean {
-  return SEGMENT_RE.test(value);
 }
 
 /** Maps up to 3 path segments to a scope; `_` and missing segments become `default`. */
@@ -69,4 +69,4 @@ export function parseIngestPath(
   };
 }
 
-export { DEFAULT_SEGMENT };
+export { DEFAULT_SEGMENT, isScopeSegment };

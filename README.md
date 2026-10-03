@@ -78,7 +78,7 @@ The path segments before the trailing `1` set the scope of every record.
 | `http://sentra@127.0.0.1:8969/my-app/_/web/1`      | `my-app`  | `default` | `web`     |
 
 - A missing segment becomes `default`. `_` skips a middle segment.
-- Segments match `[A-Za-z0-9._-]{1,64}`. More than three segments or other characters are rejected with `400 invalid_scope`.
+- Segments match `[A-Za-z0-9._-]{1,64}` and must not be `.` or `..` (URL parsing would drop them). More than three segments or other characters are rejected with `400 invalid_scope`.
 - The public key (`sentra`) and the project id (`1`) are ignored. The SDK still checks them: the key must match `\w+` and the id must be digits.
 - `sentra dsn --project my-app --service web` prints `http://sentra@127.0.0.1:8969/my-app/_/web/1`.
 - With the SDK `tunnel` option the request URL has no scope segments (for example `http://127.0.0.1:8969/api/1/envelope/`). Sentra then reads the scope from the `dsn` in the envelope header.

@@ -30,7 +30,7 @@ Then initialize the SDK with the printed DSN:
 Sentry.init({ dsn: "http://sentra@127.0.0.1:8969/1" });
 ```
 
-DSN format: `http://sentra@<host>:<port>/[project/][session/][service/]1`. A missing segment becomes `default`, `_` skips a middle segment, segments match `[A-Za-z0-9._-]{1,64}`.
+DSN format: `http://sentra@<host>:<port>/[project/][session/][service/]1`. A missing segment becomes `default`, `_` skips a middle segment, segments match `[A-Za-z0-9._-]{1,64}` and must not be `.` or `..`.
 
 ## Banner
 

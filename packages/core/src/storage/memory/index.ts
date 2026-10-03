@@ -475,9 +475,15 @@ class MemoryStorage implements StorageAdapter {
     if (Date.parse(entry.seenAt) < Date.parse(existing.firstSeenAt)) {
       existing.firstSeenAt = entry.seenAt;
     }
-    const latest = { receivedAt: existing.lastSeenAt, id: existing.lastItemId };
-    if (byReceiptAsc({ receivedAt: entry.seenAt, id: entry.itemId }, latest) > 0) {
+    if (Date.parse(entry.seenAt) > Date.parse(existing.lastSeenAt)) {
       existing.lastSeenAt = entry.seenAt;
+    }
+    // After an eviction refresh the latest event can be older than the lifetime `lastSeenAt`.
+    const latest = {
+      receivedAt: this.#items.get(existing.lastItemId)?.receivedAt ?? existing.lastSeenAt,
+      id: existing.lastItemId,
+    };
+    if (byReceiptAsc({ receivedAt: entry.seenAt, id: entry.itemId }, latest) > 0) {
       existing.lastItemId = entry.itemId;
       existing.title = entry.title;
       existing.culprit = entry.culprit;

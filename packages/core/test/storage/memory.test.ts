@@ -93,6 +93,34 @@ describe("memoryStorage", () => {
     expect(await storage.getItem(issue?.lastItemId ?? "")).not.toBeNull();
   });
 
+  it("lets an in-between event become latest after an eviction refresh", async () => {
+    const storage = memoryStorage({ maxItems: 3 });
+    const issueId = "0000000000000004";
+    const message = (receivedAt: string, text: string) =>
+      makeBatch({
+        receivedAt,
+        items: [{ kind: "message", issueId, title: text, data: { message: text } }],
+      });
+    await storage.write(message("2026-10-01T12:00:02.000Z", "evicted"));
+    await storage.write(makeBatch({ items: [{}] }));
+    const survivor = message("2026-10-01T12:00:00.000Z", "survivor");
+    await storage.write(survivor);
+    await storage.write(makeBatch({ items: [{}] }));
+    await expect(storage.getIssue(issueId)).resolves.toMatchObject({
+      lastItemId: survivor.items[0]?.item.id,
+      lastSeenAt: "2026-10-01T12:00:02.000Z",
+    });
+
+    const between = message("2026-10-01T12:00:01.000Z", "between");
+    await storage.write(between);
+    await expect(storage.getIssue(issueId)).resolves.toMatchObject({
+      lastItemId: between.items[0]?.item.id,
+      title: "between",
+      lastSeenAt: "2026-10-01T12:00:02.000Z",
+      count: 3,
+    });
+  });
+
   it("bounds failed envelopes to maxItems", async () => {
     const storage = memoryStorage({ maxItems: 2 });
     const batches = [1, 2, 3].map(() => makeBatch({ parseError: "bad" }));

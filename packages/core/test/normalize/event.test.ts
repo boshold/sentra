@@ -119,6 +119,24 @@ describe("normalizeEvent classification", () => {
     expect(item.title).toBe(title);
   });
 
+  it.each([
+    [
+      { type: "onerror", handled: false },
+      { type: "onerror", handled: false },
+    ],
+    [{ type: "onerror" }, { type: "onerror", handled: null }],
+    [{ handled: false }, { type: "generic", handled: false }],
+    [
+      { type: 5, handled: true },
+      { type: "generic", handled: true },
+    ],
+    [{ synthetic: true }, null],
+    ["junk", null],
+  ])("maps mechanism %j", (mechanism, expected) => {
+    const { item } = normalizeOne({ exception: { values: [{ type: "E", mechanism }] } });
+    expect(eventData(item).exceptions[0]?.mechanism).toEqual(expected);
+  });
+
   it("keeps all exceptions in Sentry order and titles from the last", () => {
     const { item } = normalizeOne({
       exception: {

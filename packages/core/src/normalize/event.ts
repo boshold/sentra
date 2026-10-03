@@ -24,6 +24,7 @@ type NormalizeEventResult = { ok: true; items: NewItem[] } | { ok: false; error:
 
 const TITLE_MAX = 500;
 const UNKNOWN_TITLE = "<unknown error>";
+const DEFAULT_MECHANISM_TYPE = "generic";
 
 const EVENT_KEYS = [
   "event_id",
@@ -75,16 +76,23 @@ function resolveMessageTemplate(payload: EventPayload): string | null {
   return logentry?.message ?? fromMessage ?? null;
 }
 
+function toMechanism(mechanism: ExceptionValue["mechanism"]): Exception["mechanism"] {
+  if (mechanism === undefined) {
+    return null;
+  }
+  const handled = mechanism.handled ?? null;
+  if (mechanism.type === undefined) {
+    return handled === null ? null : { type: DEFAULT_MECHANISM_TYPE, handled };
+  }
+  return { type: mechanism.type, handled };
+}
+
 function toException(value: ExceptionValue, frameOptions: FrameOptions): Exception {
-  const mechanismType = value.mechanism?.type;
   return {
     type: value.type ?? null,
     value: value.value ?? null,
     module: value.module ?? null,
-    mechanism:
-      mechanismType === undefined
-        ? null
-        : { type: mechanismType, handled: value.mechanism?.handled ?? null },
+    mechanism: toMechanism(value.mechanism),
     frames: normalizeFrames(value.stacktrace?.frames, frameOptions),
   };
 }

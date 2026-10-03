@@ -4,6 +4,8 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+pnpmfileChecksum: sha256-+rSVVqv524R495GUEqbPflaf4lBSAna0Lvr9HWnoUts=
+
 importers:
 
   .:

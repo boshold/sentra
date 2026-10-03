@@ -84,6 +84,13 @@
   },
   "overrides": [
     {
+      "files": [".pnpmfile.cjs"],
+      "rules": {
+        "import/no-commonjs": "off",
+        "import/unambiguous": "off"
+      }
+    },
+    {
       "files": ["**/*.{test,spec}.{ts,tsx,js,jsx}", "**/test/**", "**/__tests__/**"],
       "rules": {
         "typescript/no-non-null-assertion": "off",

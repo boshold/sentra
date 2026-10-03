@@ -1,6 +1,6 @@
 import { execSync } from "node:child_process";
 import { chmodSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, posix, relative, resolve } from "node:path";
+import path from "node:path";
 
 import { build } from "esbuild";
 
@@ -12,7 +12,7 @@ interface Target {
   declarations: boolean;
 }
 
-const ROOT = resolve(import.meta.dirname, "..");
+const ROOT = path.resolve(import.meta.dirname, "..");
 
 // Core before CLI: the CLI bundle imports core's dist at runtime.
 const TARGETS: Target[] = [
@@ -33,7 +33,7 @@ function resolveVersion(): string {
     return envVersion;
   }
   const parsed: unknown = JSON.parse(
-    readFileSync(join(ROOT, "packages/core/package.json"), "utf8"),
+    readFileSync(path.join(ROOT, "packages/core/package.json"), "utf8"),
   );
   if (
     typeof parsed === "object" &&
@@ -49,7 +49,7 @@ function resolveVersion(): string {
 function listDts(dir: string): string[] {
   return readdirSync(dir, { recursive: true, encoding: "utf8" })
     .filter((file) => file.endsWith(".d.ts"))
-    .map((file) => join(dir, file));
+    .map((file) => path.join(dir, file));
 }
 
 /** Published packages ship no `src/`, so `#src/*` in declarations must become relative. */
@@ -57,9 +57,12 @@ function rewriteSrcAlias(distDir: string): void {
   for (const file of listDts(distDir)) {
     const content = readFileSync(file, "utf8");
     const rewritten = content.replace(
-      /(["'])#src\/([^"']+)\1/g,
-      (_match, quote: string, path: string) => {
-        const rel = relative(dirname(file), join(distDir, path)).split("\\").join(posix.sep);
+      /(?<quote>["'])#src\/(?<target>[^"']+)\k<quote>/g,
+      (_match, quote: string, target: string) => {
+        const rel = path
+          .relative(path.dirname(file), path.join(distDir, target))
+          .split(path.sep)
+          .join(path.posix.sep);
         const specifier = rel.startsWith(".") ? rel : `./${rel}`;
         return `${quote}${specifier}${quote}`;
       },
@@ -73,8 +76,8 @@ function rewriteSrcAlias(distDir: string): void {
 const version = resolveVersion();
 
 for (const target of TARGETS) {
-  const absDir = join(ROOT, target.dir);
-  const distDir = join(absDir, "dist");
+  const absDir = path.join(ROOT, target.dir);
+  const distDir = path.join(absDir, "dist");
   rmSync(distDir, { recursive: true, force: true });
 
   await build({
@@ -98,6 +101,6 @@ for (const target of TARGETS) {
   }
 
   if (target.banner) {
-    chmodSync(join(absDir, target.out), 0o755);
+    chmodSync(path.join(absDir, target.out), 0o755);
   }
 }

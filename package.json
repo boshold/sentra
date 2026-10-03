@@ -10,13 +10,25 @@
   "type": "module",
   "scripts": {
     "build": "tsx scripts/build.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json && pnpm -r typecheck"
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:integration": "vitest run -c test/integration/vitest.config.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json && pnpm -r typecheck",
+    "lint": "oxfmt --check; oxlint --type-aware --deny-warnings",
+    "lint:fix": "oxfmt --write; oxlint --fix --fix-suggestions --fix-dangerously --deny-warnings --type-aware",
+    "check": "pnpm typecheck && pnpm lint:fix && pnpm build && pnpm test:coverage"
   },
   "devDependencies": {
+    "@bosdev/sentra-core": "workspace:*",
     "@types/node": "^26.2.0",
+    "@vitest/coverage-v8": "^4.1.11",
     "esbuild": "^0.28.2",
+    "oxfmt": "^0.64.0",
+    "oxlint": "^1.79.0",
+    "oxlint-tsgolint": "^7.0.2001",
     "tsx": "^4.23.12",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=22.15"

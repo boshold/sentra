@@ -20,19 +20,20 @@
     "LICENSE"
   ],
   "type": "module",
+  "imports": {
+    "#src/*": "./src/*"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.mjs"
     }
   },
-  "imports": {
-    "#src/*": "./src/*"
-  },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
+    "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

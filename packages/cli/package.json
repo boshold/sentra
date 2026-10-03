@@ -30,6 +30,7 @@
     "access": "public"
   },
   "scripts": {
+    "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

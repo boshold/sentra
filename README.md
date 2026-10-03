@@ -6,10 +6,10 @@ Sentra is a local, Sentry-compatible event receiver written in TypeScript. Apps 
 
 ## Packages
 
-| Package | Path | Role |
-| ------- | ---- | ---- |
+| Package               | Path            | Role                                                                                                                    |
+| --------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | `@bosdev/sentra-core` | `packages/core` | Library: ingest handler, parser, typed model, issues, source maps, storage, query, live subscribe, MCP tool definitions |
-| `@bosdev/sentra-cli` | `packages/cli` | Standalone app: HTTP server, startup banner, live terminal output, HTTP query API, MCP endpoint |
+| `@bosdev/sentra-cli`  | `packages/cli`  | Standalone app: HTTP server, startup banner, live terminal output, HTTP query API, MCP endpoint                         |
 
 ## License
 

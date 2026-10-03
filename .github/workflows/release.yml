@@ -1,0 +1,70 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v0.1.0)"
+        required: true
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  npm:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/setup@5d160c5bc68a09337ad0d5654e237e03253b5879 # v1.0.0
+        with:
+          install: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+      # OIDC trusted publishing needs npm >= 11.5.1; Node 22 ships npm 10.
+      - run: npm install -g npm@latest
+      - name: Resolve version from tag
+        run: echo "SENTRA_VERSION=${TAG#v}" >> "$GITHUB_ENV"
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Set package versions to tag
+        run: pnpm -r exec npm version "$SENTRA_VERSION" --no-git-tag-version --allow-same-version
+      # Auth via GitHub OIDC trusted publishing — NODE_AUTH_TOKEN="" so npm uses
+      # OIDC instead of a token. Each package needs a Trusted Publisher on npm
+      # (repo boshold/sentra, workflow release.yml). Idempotent: skip versions
+      # already on the registry so a partial-failure re-run can complete.
+      # Publish the pnpm-packed tarball: only pnpm rewrites workspace:* to the real version.
+      # Core before CLI: the CLI depends on the core version being published.
+      - name: Publish packages
+        env:
+          NODE_AUTH_TOKEN: ""
+        run: |
+          for dir in packages/core packages/cli; do
+            name=$(node -p "require('./$dir/package.json').name")
+            if npm view "$name@$SENTRA_VERSION" version >/dev/null 2>&1; then
+              echo "$name@$SENTRA_VERSION already published — skipping"
+              continue
+            fi
+            tarball=$(cd "$dir" && pnpm pack --pack-destination "$RUNNER_TEMP" | tail -n 1)
+            npm publish "$tarball" --access public --provenance
+          done
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: npm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          gh release delete "$TAG" --yes --cleanup-tag=false 2>/dev/null || true
+          gh release create "$TAG" --generate-notes

@@ -8,7 +8,7 @@
   "method": "POST",
   "path": "/api/1/envelope/",
   "headers": {},
-  "bodyBytes": 4572,
+  "bodyBytes": 4582,
   "itemTypes": [
     "event"
   ]

@@ -165,6 +165,16 @@ describe("envelope fixtures", () => {
     }
   });
 
+  it.each(["cpu_description", "boot_time", "memory_size", "free_memory", "Europe/"])(
+    "contains no hardware or locale detail %j",
+    (needle) => {
+      for (const fixture of fixtures) {
+        const content = decoder.decode(decoded(fixture));
+        expect(content.includes(needle), `${fixture.meta.name} contains ${needle}`).toBe(false);
+      }
+    },
+  );
+
   it("rebuilds the recorded request", async () => {
     const fixture = fixtures.find((candidate) => candidate.meta.scenario === "node-gzip");
     if (fixture === undefined) {

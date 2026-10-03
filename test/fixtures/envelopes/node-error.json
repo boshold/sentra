@@ -8,7 +8,7 @@
   "method": "POST",
   "path": "/my-app/3f9a1c/web/api/1/envelope/?sentry_version=7&sentry_key=sentra&sentry_client=sentry.javascript.node%2F11.1.0",
   "headers": {},
-  "bodyBytes": 4478,
+  "bodyBytes": 4488,
   "itemTypes": [
     "event"
   ]

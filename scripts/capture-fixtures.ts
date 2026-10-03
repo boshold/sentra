@@ -129,6 +129,25 @@ function scrubHardware<
   return event;
 }
 
+const HARDWARE_SPAN_ATTRIBUTES = [
+  "device.boot_time",
+  "device.cpu_description",
+  "device.memory_size",
+  "device.free_memory",
+  "app.free_memory",
+];
+
+/** Streamed spans skip beforeSend*; their context data lives in flat attributes. */
+function scrubSpanHardware<T extends { attributes: object }>(span: T): T {
+  for (const key of HARDWARE_SPAN_ATTRIBUTES) {
+    Reflect.deleteProperty(span.attributes, key);
+  }
+  if (Reflect.has(span.attributes, "culture.timezone")) {
+    Reflect.set(span.attributes, "culture.timezone", "UTC");
+  }
+  return span;
+}
+
 async function loadNodeSdk() {
   return import("@sentry/node");
 }
@@ -145,6 +164,7 @@ async function withNode(
     serverName: SERVER_NAME,
     beforeSend: scrubHardware,
     beforeSendTransaction: scrubHardware,
+    beforeSendSpan: scrubSpanHardware,
     ...options,
   });
   await body(Sentry);
@@ -176,6 +196,7 @@ async function withBrowser(
         Sentry.makeFetchTransport(transportOptions, async (...args) => globalThis.fetch(...args)),
       beforeSend: scrubHardware,
       beforeSendTransaction: scrubHardware,
+      beforeSendSpan: scrubSpanHardware,
       ...options(Sentry),
     });
     await body(Sentry);

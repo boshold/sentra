@@ -96,7 +96,16 @@ class SqliteStorage implements StorageAdapter {
 
   async #open(generation: number): Promise<Connection> {
     if (this.#path !== MEMORY_PATH) {
-      mkdirSync(path.dirname(this.#path), { recursive: true });
+      const dir = path.dirname(this.#path);
+      try {
+        mkdirSync(dir, { recursive: true });
+      } catch (error) {
+        throw new SentraStorageError(
+          "storage_unavailable",
+          `sqliteStorage: cannot create directory ${dir}: ${error instanceof Error ? error.message : String(error)}`,
+          { cause: error },
+        );
+      }
     }
     const driver = await loadDriver(this.#driverOption, this.#path);
     if (generation !== this.#generation) {

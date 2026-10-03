@@ -311,7 +311,10 @@ function createStderrLogger(
 }
 
 /** Does not open the database; `sqliteStorage` creates missing parent directories on init. */
-function toSentraOptions(config: StartConfig): SentraOptions {
+function toSentraOptions(
+  config: StartConfig,
+  logger: SentraLogger = createStderrLogger(config.logLevel),
+): SentraOptions {
   return {
     storage:
       config.storage === "sqlite"
@@ -329,7 +332,7 @@ function toSentraOptions(config: StartConfig): SentraOptions {
       allowedHosts: sourceMapHosts(config),
       sourceRoots: config.sourceRoots,
     },
-    logger: createStderrLogger(config.logLevel),
+    logger,
   };
 }
 

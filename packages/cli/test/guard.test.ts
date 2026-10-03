@@ -47,6 +47,18 @@ describe("createGuard", () => {
     });
   });
 
+  it.each([
+    ["::1", "[::1]:8969"],
+    ["[::1]", "[::1]"],
+    ["::", "[::]:8969"],
+    ["fe80::1", "[fe80::1]:8969"],
+    ["FE80::0001", "[fe80::1]"],
+  ])("normalizes IPv6 bound host %s", (boundHost, host) => {
+    const guard = createGuard({ boundHost, allowedHosts: [] });
+    expect(guard({ host, origin: `http://${host}` })).toEqual({ ok: true });
+    expect(guard({ host: "[fe80::2]", origin: undefined })).toMatchObject({ ok: false });
+  });
+
   it("brackets IPv6 bound hosts", () => {
     const v6 = createGuard({ boundHost: "fe80::1", allowedHosts: ["fd00::2"] });
     expect(v6({ host: "[fe80::1]:8969", origin: undefined })).toEqual({ ok: true });

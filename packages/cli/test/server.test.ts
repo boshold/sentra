@@ -98,7 +98,15 @@ describe("startServer", () => {
         {},
         process.cwd(),
       );
-      await expect(startServer(config)).rejects.toBeInstanceOf(CliRuntimeError);
+      const failure: unknown = await startServer(config).catch((error: unknown) => error);
+      expect(failure).toBeInstanceOf(CliRuntimeError);
+      expect(failure).toMatchObject({ cause: { code: "storage_unavailable" } });
+      const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+      try {
+        expect(await runCli(["--port", "0", "--db", path.join(blocker, "s.db")])).toBe(1);
+      } finally {
+        stderr.mockRestore();
+      }
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

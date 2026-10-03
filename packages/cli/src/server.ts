@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import type { Server } from "node:http";
 
 import { SentraConfigError, createSentra, toNodeListener } from "@bosdev/sentra-core";
-import type { Sentra } from "@bosdev/sentra-core";
+import type { Sentra, SentraLogger } from "@bosdev/sentra-core";
 
 import {
   CliRuntimeError,
@@ -69,17 +69,13 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-async function openSentra(config: StartConfig, stderr: NodeJS.WritableStream): Promise<Sentra> {
+async function openSentra(config: StartConfig, logger: SentraLogger): Promise<Sentra> {
   try {
-    return await createSentra({
-      ...toSentraOptions(config),
-      logger: createStderrLogger(config.logLevel, stderr),
-    });
+    return await createSentra(toSentraOptions(config, logger));
   } catch (error) {
     if (error instanceof SentraConfigError) {
       throw new CliUsageError(error.message);
     }
-    // SentraStorageError, but also raw fs errors from creating the db directory.
     throw new CliRuntimeError(`cannot start: ${messageOf(error)}`, { cause: error });
   }
 }
@@ -115,7 +111,8 @@ async function startServer(
   config: StartConfig,
   io: ServerIo = { stdout: process.stdout, stderr: process.stderr },
 ): Promise<RunningServer> {
-  const sentra = await openSentra(config, io.stderr);
+  const logger = createStderrLogger(config.logLevel, io.stderr);
+  const sentra = await openSentra(config, logger);
   const closeHooks: CloseHook[] = [];
   const guard = createGuard({ boundHost: config.host, allowedHosts: config.allowedHosts });
   const routes = {
@@ -128,9 +125,7 @@ async function startServer(
       : null,
     mcp: config.mcp ? createMcpRoute(sentra, config) : null,
   };
-  const server = createServer(
-    createRouter(routes, guard, { logger: createStderrLogger(config.logLevel, io.stderr) }),
-  );
+  const server = createServer(createRouter(routes, guard, { logger }));
   try {
     await listen(server, config);
   } catch (error) {

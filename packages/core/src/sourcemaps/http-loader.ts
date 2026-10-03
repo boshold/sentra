@@ -11,6 +11,8 @@ interface HttpLoaderOptions {
   allowedHosts: ReadonlySet<string>;
   timeoutMs: number;
   maxBytes?: number;
+  /** Shared deadline (e.g. per-envelope budget); combined with `timeoutMs` per fetch. */
+  signal?: AbortSignal;
 }
 
 type FetchResult =
@@ -151,7 +153,9 @@ async function fetchLimited(
   options: HttpLoaderOptions,
   expectJavaScript: boolean,
 ): Promise<FetchResult> {
-  const signal = AbortSignal.timeout(options.timeoutMs);
+  const timeout = AbortSignal.timeout(options.timeoutMs);
+  const signal =
+    options.signal === undefined ? timeout : AbortSignal.any([timeout, options.signal]);
   try {
     return await fetchHop(url, 0, { options, signal, expectJavaScript });
   } catch (error) {

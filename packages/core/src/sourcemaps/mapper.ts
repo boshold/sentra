@@ -40,6 +40,29 @@ const CONTEXT_LINES = 5;
 const MAX_CONTEXT_LINE_LENGTH = 300;
 const BIASES: readonly Bias[] = [GREATEST_LOWER_BOUND, LEAST_UPPER_BOUND];
 
+function splitLines(content: string): string[] {
+  return content.split(/\r?\n/);
+}
+
+/** Split `sourcesContent` per (traceMap, source); lives as long as the cached TraceMap. */
+const embeddedLines = new WeakMap<TraceMap, Map<string, string[] | null>>();
+
+function embeddedSourceLines(traceMap: TraceMap, source: string): string[] | null {
+  let perMap = embeddedLines.get(traceMap);
+  if (perMap === undefined) {
+    perMap = new Map();
+    embeddedLines.set(traceMap, perMap);
+  }
+  const cached = perMap.get(source);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const content = sourceContentFor(traceMap, source);
+  const lines = content === null ? null : splitLines(content);
+  perMap.set(source, lines);
+  return lines;
+}
+
 function createBudget(budgetMs: number, now: () => number = () => performance.now()): Budget {
   const start = now();
   const remainingMs = (): number => Math.max(0, budgetMs - (now() - start));
@@ -73,8 +96,8 @@ function truncate(line: string): string {
   return line.length > MAX_CONTEXT_LINE_LENGTH ? line.slice(0, MAX_CONTEXT_LINE_LENGTH) : line;
 }
 
-function extractContext(content: string, lineno: number): ContextLines {
-  const lines = content.split(/\r?\n/);
+function extractContext(content: string | readonly string[], lineno: number): ContextLines {
+  const lines = typeof content === "string" ? splitLines(content) : content;
   const index = lineno - 1;
   const current = Number.isInteger(lineno) ? lines[index] : undefined;
   if (current === undefined || index < 0) {
@@ -111,7 +134,7 @@ async function mapFrame(
     return null;
   }
   const filePath = filePathOf(position.source);
-  let content = sourceContentFor(traceMap, position.source);
+  let content: string | readonly string[] | null = embeddedSourceLines(traceMap, position.source);
   if (content === null && filePath !== null) {
     content = await deps.readSource(filePath);
   }

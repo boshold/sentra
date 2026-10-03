@@ -18,6 +18,7 @@ import {
   resolveScopeTimeFilter,
 } from "#src/query/filters.js";
 import { createRetention } from "#src/retention.js";
+import { createSourceMapResolver } from "#src/sourcemaps/resolver.js";
 import type {
   Envelope,
   Issue,
@@ -147,13 +148,18 @@ async function createSentraWith(
   retention.start();
   const bus = createLiveBus(logger);
   const sourceRoots = new Set(options.sourceMaps.sourceRoots);
-  const onEnvelope = createPipeline({
-    storage,
-    bus,
-    options,
-    logger,
-    mapFrames: internals.mapFrames,
-  });
+  const mapFrames =
+    internals.mapFrames ??
+    (options.sourceMaps.enabled
+      ? createSourceMapResolver({
+          allowedHosts: options.sourceMaps.allowedHosts,
+          sourceRoots,
+          fetchTimeoutMs: options.sourceMaps.fetchTimeoutMs,
+          budgetMs: options.sourceMaps.budgetMs,
+          logger,
+        }).mapFrames
+      : undefined);
+  const onEnvelope = createPipeline({ storage, bus, options, logger, mapFrames });
   const handler = createIngestHandler({
     limits: { maxEnvelopeBytes: options.limits.maxEnvelopeBytes },
     onEnvelope,

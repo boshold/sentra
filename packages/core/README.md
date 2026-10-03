@@ -78,21 +78,21 @@ const issues = await sentra.query.listIssues({
 
 `createSentra(options?: SentraOptions): Promise<Sentra>` opens the storage and runs a first retention pass.
 
-| Option                      | Default                                 | Description                                                                                 |
-| --------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `storage`                   | `memoryStorage()`                       | Storage adapter                                                                             |
-| `publicUrl`                 | none                                    | Base URL for `getDsn()` without path, e.g. `http://127.0.0.1:8969`                          |
-| `retention.maxIdle`         | `"30d"` (`DEFAULT_MAX_IDLE`)            | Delete a session after this time without events; duration or `"never"`                      |
-| `retention.noiseMaxAge`     | `"7d"` (`DEFAULT_NOISE_MAX_AGE`)        | Delete `span`, `transaction`, `log`, `other` records older than this; duration or `"never"` |
-| `limits.maxEnvelopeBytes`   | 20 MiB (`DEFAULT_MAX_ENVELOPE_BYTES`)   | Max envelope size, before and after decompression                                           |
-| `limits.maxAttachmentBytes` | 10 MiB (`DEFAULT_MAX_ATTACHMENT_BYTES`) | Larger attachments are recorded without their bytes                                         |
-| `rawEnvelopes`              | `true`                                  | Keep raw envelope bodies                                                                    |
-| `sourceMaps.enabled`        | `true`                                  | Map stack frames at ingest                                                                  |
-| `sourceMaps.allowedHosts`   | `[]`                                    | Hosts (`host`, `host:port`, IPv6) allowed for HTTP fetches, added to loopback               |
-| `sourceMaps.sourceRoots`    | `[]`                                    | Absolute directories the FS loader may read                                                 |
-| `sourceMaps.fetchTimeoutMs` | `1500`                                  | Timeout per HTTP fetch                                                                      |
-| `sourceMaps.budgetMs`       | `3000`                                  | Time budget for mapping one envelope                                                        |
-| `logger`                    | silent                                  | `{ debug, info, warn, error }(message, meta?)`                                              |
+| Option                      | Default                                 | Description                                                                                                                                                    |
+| --------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `storage`                   | `memoryStorage()`                       | Storage adapter                                                                                                                                                |
+| `publicUrl`                 | none                                    | Base URL for `getDsn()` without path, e.g. `http://127.0.0.1:8969`                                                                                             |
+| `retention.maxIdle`         | `"30d"` (`DEFAULT_MAX_IDLE`)            | Delete a session after this time without events; duration or `"never"`                                                                                         |
+| `retention.noiseMaxAge`     | `"7d"` (`DEFAULT_NOISE_MAX_AGE`)        | Delete `span`, `transaction`, `log`, `other` records older than this; duration or `"never"`                                                                    |
+| `limits.maxEnvelopeBytes`   | 20 MiB (`DEFAULT_MAX_ENVELOPE_BYTES`)   | Max envelope size, before and after decompression                                                                                                              |
+| `limits.maxAttachmentBytes` | 10 MiB (`DEFAULT_MAX_ATTACHMENT_BYTES`) | Larger attachments are recorded without their bytes                                                                                                            |
+| `rawEnvelopes`              | `true`                                  | Keep raw envelope bodies                                                                                                                                       |
+| `sourceMaps.enabled`        | `true`                                  | Map stack frames at ingest                                                                                                                                     |
+| `sourceMaps.allowedHosts`   | `[]`                                    | Hosts (`host`, `host:port`, IPv6) allowed for HTTP fetches and in-app frames, added to loopback. The port is ignored: `host:port` allows that host on any port |
+| `sourceMaps.sourceRoots`    | `[]`                                    | Absolute directories the FS loader may read                                                                                                                    |
+| `sourceMaps.fetchTimeoutMs` | `1500`                                  | Timeout per HTTP fetch                                                                                                                                         |
+| `sourceMaps.budgetMs`       | `3000`                                  | Time budget for mapping one envelope                                                                                                                           |
+| `logger`                    | silent                                  | `{ debug, info, warn, error }(message, meta?)`                                                                                                                 |
 
 Durations are `<number><ms|s|m|h|d|w>`, for example `"60m"` or `"30d"`. The defaults are exported as `DEFAULT_MAX_IDLE`, `DEFAULT_NOISE_MAX_AGE`, `DEFAULT_MAX_ENVELOPE_BYTES`, `DEFAULT_MAX_ATTACHMENT_BYTES` and `DEFAULT_MAX_ITEMS`. Invalid options throw `SentraConfigError` (`invalid_option`).
 

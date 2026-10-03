@@ -78,6 +78,19 @@ describe("toDisplaySource", () => {
     ["plain path with query", "/home/u/app/src/a.ts?v=abc#x", root, "src/a.ts"],
     ["relative source untouched", "../src/a.ts", root, "../src/a.ts"],
     ["encoded url path", "http://localhost:5173/src/my%20file.ts", [], "src/my file.ts"],
+    [
+      "encoded slash stays encoded",
+      "http://localhost:5173/x/%2F..%2F..%2Fy.ts",
+      [],
+      "x/%2F..%2F..%2Fy.ts",
+    ],
+    [
+      "encoded dot segment stays encoded",
+      "http://localhost:5173/x/%2E%2E%2Fy.ts",
+      [],
+      "x/%2E%2E%2Fy.ts",
+    ],
+    ["invalid encoding kept", "http://localhost:5173/x/%E0%A4%A.ts", [], "x/%E0%A4%A.ts"],
   ])("%s", (_name, source, roots, expected) => {
     expect(toDisplaySource(source, roots)).toBe(expected);
   });

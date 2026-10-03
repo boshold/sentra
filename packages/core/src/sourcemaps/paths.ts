@@ -51,12 +51,18 @@ function stripLeadingRelative(value: string): string {
   return result;
 }
 
-function safeDecode(value: string): string {
+function decodeSegment(segment: string): string {
   try {
-    return decodeURIComponent(value);
+    const decoded = decodeURIComponent(segment);
+    return decoded.includes("/") || decoded === "." || decoded === ".." ? segment : decoded;
   } catch {
-    return value;
+    return segment;
   }
+}
+
+/** Decodes per segment so `%2F` cannot introduce new path segments. */
+function decodePathname(pathname: string): string {
+  return pathname.split("/").map(decodeSegment).join("/");
 }
 
 /** Normalizes a map source for display (`MappedLocation.source`). */
@@ -70,7 +76,7 @@ function toDisplaySource(source: string, roots: readonly string[]): string {
     relative = true;
   } else if (/^https?:\/\//i.test(value)) {
     try {
-      value = safeDecode(new URL(value).pathname);
+      value = decodePathname(new URL(value).pathname);
       relative = true;
     } catch {
       // Keep as is

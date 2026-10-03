@@ -120,6 +120,12 @@ describe("resolveMapReference", () => {
       "http://localhost:5173/src/a.js",
       { kind: "url", url: "https://127.0.0.1:3000/a.js.map" },
     ],
+    [
+      "protocol-relative cross-host ref passes through (loader re-checks host)",
+      "//evil.test/x.map",
+      "http://localhost:5173/src/a.js",
+      { kind: "url", url: "http://evil.test/x.map" },
+    ],
     // oxlint-disable-next-line eslint/no-script-url -- untrusted map reference input
     ["javascript: on http base", "javascript:alert(1)", "http://localhost/a.js", null],
     ["file: on http base", "file:///etc/passwd", "http://localhost/a.js", null],

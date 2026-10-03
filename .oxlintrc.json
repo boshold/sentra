@@ -79,7 +79,8 @@
     "unicorn/filename-case": "off",
     "promise/avoid-new": "off",
     "unicorn/max-nested-calls": "off",
-    "unicorn/prefer-export-from": "off"
+    "unicorn/prefer-export-from": "off",
+    "unicorn/number-literal-case": "off"
   },
   "overrides": [
     {

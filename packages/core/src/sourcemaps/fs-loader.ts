@@ -1,4 +1,6 @@
-import { readFile, realpath, stat } from "node:fs/promises";
+import { constants } from "node:fs";
+import { open, realpath, stat } from "node:fs/promises";
+import type { FileHandle } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -19,6 +21,9 @@ interface ResolvedFsFile {
   realPath: string;
   mtimeMs: number;
   size: number;
+  /** Identity from `stat`; the opened handle must match it. */
+  dev?: number;
+  ino?: number;
 }
 
 const SSR_GUARD_EXTENSIONS: readonly string[] = [".vue", ".ts", ".tsx", ".mts", ".jsx"];
@@ -59,19 +64,62 @@ async function resolveInsideRoots(
       return null;
     }
     const info = await stat(realPath);
-    return info.isFile() ? { realPath, mtimeMs: info.mtimeMs, size: info.size } : null;
+    return info.isFile()
+      ? { realPath, mtimeMs: info.mtimeMs, size: info.size, dev: info.dev, ino: info.ino }
+      : null;
   } catch {
     return null;
   }
 }
 
-/** Reads a resolved file; `null` when it exceeds `maxBytes` (also re-checked after reading). */
+class FileChangedError extends Error {
+  public override readonly name = "FileChangedError";
+}
+
+async function readInto(handle: FileHandle, buffer: Buffer, offset: number): Promise<number> {
+  if (offset >= buffer.byteLength) {
+    return offset;
+  }
+  const { bytesRead } = await handle.read(buffer, offset, buffer.byteLength - offset, offset);
+  return bytesRead === 0 ? offset : readInto(handle, buffer, offset + bytesRead);
+}
+
+/**
+ * Reads a resolved file through one no-follow handle, bounded to `maxBytes`.
+ * `null` when too large; throws `FileChangedError` when the file differs from `file`
+ * (replaced, modified or resized since `resolveInsideRoots`), so cache keys stay exact.
+ */
 async function readResolved(file: ResolvedFsFile, maxBytes: number): Promise<string | null> {
   if (file.size > maxBytes) {
     return null;
   }
-  const bytes = await readFile(file.realPath);
-  return bytes.byteLength > maxBytes ? null : bytes.toString("utf8");
+  // oxlint-disable-next-line no-bitwise -- open(2) flag set
+  const handle = await open(file.realPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const info = await handle.stat();
+    if (
+      !info.isFile() ||
+      info.mtimeMs !== file.mtimeMs ||
+      (file.dev !== undefined && info.dev !== file.dev) ||
+      (file.ino !== undefined && info.ino !== file.ino)
+    ) {
+      throw new FileChangedError(file.realPath);
+    }
+    if (info.size > maxBytes) {
+      return null;
+    }
+    const buffer = Buffer.alloc(Math.min(info.size, maxBytes) + 1);
+    const bytesRead = await readInto(handle, buffer, 0);
+    if (bytesRead > maxBytes) {
+      return null;
+    }
+    if (bytesRead !== info.size) {
+      throw new FileChangedError(file.realPath);
+    }
+    return buffer.toString("utf8", 0, bytesRead);
+  } finally {
+    await handle.close();
+  }
 }
 
 function toLoaded(json: string, sourcesBase: string): LoadResult {

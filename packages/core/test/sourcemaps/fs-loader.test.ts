@@ -1,4 +1,15 @@
-import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import {
+  mkdir,
+  mkdtemp,
+  open,
+  realpath,
+  rm,
+  symlink,
+  unlink,
+  utimes,
+  writeFile,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -15,7 +26,7 @@ import { classifyLocation } from "#src/sourcemaps/paths.js";
 
 vi.mock("node:fs/promises", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs/promises")>();
-  return { ...actual, readFile: vi.fn(actual.readFile) };
+  return { ...actual, open: vi.fn(actual.open) };
 });
 
 let base = "";
@@ -45,9 +56,7 @@ async function write(relPath: string, content: string): Promise<string> {
 }
 
 function readPaths(): string[] {
-  return vi
-    .mocked(readFile)
-    .mock.calls.flatMap(([file]) => (typeof file === "string" ? [file] : []));
+  return vi.mocked(open).mock.calls.flatMap(([file]) => (typeof file === "string" ? [file] : []));
 }
 
 function readOutside(): boolean {
@@ -109,7 +118,7 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  vi.mocked(readFile).mockClear();
+  vi.mocked(open).mockClear();
 });
 
 afterEach(() => {
@@ -137,6 +146,8 @@ describe("resolveInsideRoots", () => {
       realPath: path.join(root, "plain.js"),
       mtimeMs: expect.any(Number),
       size: "plain();\n".length,
+      dev: expect.any(Number),
+      ino: expect.any(Number),
     });
   });
 
@@ -190,7 +201,7 @@ describe("loadFsSourceMap", () => {
       sourcesBase: pathToFileURL(path.join(root, "dist/app.js")).href,
       origin: "fs",
     });
-    // Proves the readFile mock intercepts the loader's reads.
+    // Proves the open mock intercepts the loader's reads.
     expect(readPaths()).toContain(path.join(root, "dist/app.js"));
   });
 
@@ -283,6 +294,67 @@ describe("loadFsSourceMap", () => {
 
   it("guards exactly the SSR extensions", () => {
     expect(SSR_GUARD_EXTENSIONS).toEqual([".vue", ".ts", ".tsx", ".mts", ".jsx"]);
+  });
+});
+
+describe("bounded no-follow reads", () => {
+  const FIXED_TIME = 1_700_000_000;
+
+  async function pinned(relPath: string, content: string): Promise<string> {
+    const target = await write(relPath, content);
+    await utimes(target, FIXED_TIME, FIXED_TIME);
+    return target;
+  }
+
+  it("fails when the file was modified after resolving", async () => {
+    const target = await write("root/race/modified.js", `m();\n${inlineComment()}\n`);
+    const file = await resolveInsideRoots(target, realRoots);
+    await writeFile(target, "changed();\n");
+    await utimes(target, FIXED_TIME, FIXED_TIME);
+    expect(file).not.toBeNull();
+    expect(file === null ? null : await loadFsSourceMap(file, realRoots)).toEqual({
+      status: "failed",
+      reason: "read_failed",
+    });
+  });
+
+  it("refuses a file swapped for a symlink after resolving", async () => {
+    const target = await write("root/race/swapped.js", `s();\n${inlineComment()}\n`);
+    const file = await resolveInsideRoots(target, realRoots);
+    await unlink(target);
+    await symlink(path.join(outside, "secret.js"), target);
+    expect(file === null ? null : await loadFsSourceMap(file, realRoots)).toEqual({
+      status: "failed",
+      reason: "read_failed",
+    });
+  });
+
+  it("does not read a file that grew past maxBytes after resolving", async () => {
+    const target = await pinned("root/race/grown.js", "g();\n");
+    const file = await resolveInsideRoots(target, realRoots);
+    await writeFile(target, "x".repeat(500));
+    await utimes(target, FIXED_TIME, FIXED_TIME);
+    expect(
+      file === null ? null : await loadFsSourceMap(file, realRoots, { maxBytes: 100 }),
+    ).toEqual({ status: "failed", reason: "too_large" });
+  });
+
+  it("returns null from readSourceInsideRoots for a source swapped for a symlink", async () => {
+    const target = await write("root/race/source.ts", "export const a = 1;\n");
+    expect(await readSourceInsideRoots(target, realRoots)).toBe("export const a = 1;\n");
+    await unlink(target);
+    await symlink(path.join(outside, "secret.js"), target);
+    expect(await readSourceInsideRoots(target, realRoots)).toBeNull();
+  });
+
+  it("opens with O_NOFOLLOW", async () => {
+    await load(path.join(root, "dist/app.js"));
+    const flags = vi.mocked(open).mock.calls.map(([, flag]) => flag);
+    expect(flags.length).toBeGreaterThan(0);
+    for (const flag of flags) {
+      // oxlint-disable-next-line no-bitwise -- open(2) flag check
+      expect(typeof flag === "number" && (flag & constants.O_NOFOLLOW) !== 0).toBe(true);
+    }
   });
 });
 

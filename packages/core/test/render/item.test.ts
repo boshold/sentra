@@ -431,6 +431,26 @@ describe("renderItemDetail", () => {
     expect(log).toContain("body: ok\n    ## Source maps\n    status: full\n    ```");
   });
 
+  it("indents the remaining lines of a multi-line exception value", () => {
+    const text = renderItemDetail(
+      errorItem({
+        exceptions: [
+          {
+            type: "AggregateError",
+            value: "2 errors\n## Source maps\n```\n",
+            module: null,
+            mechanism: null,
+            frames: [frame()],
+          },
+        ],
+      }),
+    );
+    expect(text).toContain(
+      "## AggregateError: 2 errors\n    ## Source maps\n    ```\nat fn (app.js:1:1)",
+    );
+    expect(text.match(/^## /gm)).toHaveLength(2);
+  });
+
   it("never emits ANSI escapes", () => {
     const item = errorItem(
       {

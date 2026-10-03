@@ -124,6 +124,13 @@ function exceptionTitle(type: string | null, value: string | null): string {
   return value === null ? "Exception" : firstLine(value);
 }
 
+/** Lines after the first of an exception value, indented below the heading. */
+function valueContinuation(value: string | null): string[] {
+  const clean = value === null ? "" : sanitizeText(value);
+  const rest = clean.includes("\n") ? clean.slice(clean.indexOf("\n") + 1).trimEnd() : "";
+  return rest === "" ? [] : [`    ${indentContinuation(rest)}`];
+}
+
 function eventLines(data: EventData): string[] {
   const lines = fieldLines([["message", data.message]]);
   for (const exception of data.exceptions.toReversed()) {
@@ -131,6 +138,7 @@ function eventLines(data: EventData): string[] {
     lines.push(
       "",
       `## ${exceptionTitle(exception.type, exception.value)}`,
+      ...valueContinuation(exception.value),
       ...(stack === "" ? [] : [stack]),
     );
   }

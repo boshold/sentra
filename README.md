@@ -116,6 +116,7 @@ The core never listens on a port itself. The host owns the HTTP server and passe
 ```ts
 import { createServer } from "node:http";
 import { createSentra, sqliteStorage, toNodeListener } from "@bosdev/sentra-core";
+import { McpServer } from "@modelcontextprotocol/server";
 
 const sentra = await createSentra({
   storage: sqliteStorage({ path: "/var/lib/my-host/sentra.db" }),
@@ -133,6 +134,7 @@ const unsubscribe = sentra.subscribe({ project: "my-app", session: "3f9a1c" }, (
   if (event.type === "item.created") console.log(event.item.kind, event.item.title);
 });
 
+const mcpServer = new McpServer({ name: "my-host", version: "1.0.0" });
 for (const tool of sentra.mcpTools()) {
   mcpServer.registerTool(
     tool.name,
@@ -153,7 +155,7 @@ const issues = await sentra.query.listIssues({
 });
 ```
 
-`mcpServer` is the host's own `McpServer` (SDK v1 `@modelcontextprotocol/sdk` or v2 `@modelcontextprotocol/server`). On shutdown call `unsubscribe()` and `await sentra.close()`. A host with its own router can use `isIngestPath(pathname)` to decide which requests go to `sentra.handle`.
+`mcpServer` stands for the host's own `McpServer`, from SDK v2 `@modelcontextprotocol/server` as shown or SDK v1 `@modelcontextprotocol/sdk/server/mcp.js`; connecting it to a transport is up to the host. On shutdown call `unsubscribe()` and `await sentra.close()`. A host with its own router can use `isIngestPath(pathname)` to decide which requests go to `sentra.handle`.
 
 On Bun, `auto` uses only `node:sqlite` (built into Bun `>=1.4`) and never loads `better-sqlite3`: Bun 1.4.0 aborts the whole process when it loads that native addon, and the abort cannot be caught. `driver: "better-sqlite3"` still forces it. Hosts compiled with `bun build --compile` can pass `--external better-sqlite3` to keep the unused package out of the binary.
 

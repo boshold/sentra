@@ -33,6 +33,7 @@ Requires Node `>=22.15` or Bun `>=1.4`.
 ```ts
 import { createServer } from "node:http";
 import { createSentra, sqliteStorage, toNodeListener } from "@bosdev/sentra-core";
+import { McpServer } from "@modelcontextprotocol/server";
 
 const sentra = await createSentra({
   storage: sqliteStorage({ path: "/var/lib/my-host/sentra.db" }),
@@ -50,6 +51,7 @@ const unsubscribe = sentra.subscribe({ project: "my-app", session: "3f9a1c" }, (
   if (event.type === "item.created") console.log(event.item.kind, event.item.title);
 });
 
+const mcpServer = new McpServer({ name: "my-host", version: "1.0.0" });
 for (const tool of sentra.mcpTools()) {
   mcpServer.registerTool(
     tool.name,
@@ -70,7 +72,7 @@ const issues = await sentra.query.listIssues({
 });
 ```
 
-`mcpServer` is the host's own `McpServer` (SDK v1 `@modelcontextprotocol/sdk` or v2 `@modelcontextprotocol/server`). On shutdown call `unsubscribe()` and `await sentra.close()`. A host with its own router can use `isIngestPath(pathname)` to decide which requests go to `sentra.handle`.
+`mcpServer` stands for the host's own `McpServer`, from SDK v2 `@modelcontextprotocol/server` as shown or SDK v1 `@modelcontextprotocol/sdk/server/mcp.js`; connecting it to a transport is up to the host. On shutdown call `unsubscribe()` and `await sentra.close()`. A host with its own router can use `isIngestPath(pathname)` to decide which requests go to `sentra.handle`.
 
 `sentra.handle(request: Request): Promise<Response>` is bound and never rejects. It answers `POST` with `200 { id }` and `OPTIONS` with `204` plus CORS headers. Errors use the body `{ error: { code, message, details? } }` and repeat the message in `X-Sentry-Error`. It never answers `429`, because SDK v11 stops sending for 60 s after one.
 
@@ -199,6 +201,7 @@ type LiveEvent =
 The same loop works with SDK v1 (`@modelcontextprotocol/sdk`) and v2 (`@modelcontextprotocol/server`):
 
 ```ts
+const mcpServer = new McpServer({ name: "my-host", version: "1.0.0" });
 for (const tool of sentra.mcpTools()) {
   mcpServer.registerTool(
     tool.name,

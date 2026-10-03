@@ -31,12 +31,8 @@ const TARGETS: Target[] = [
   },
 ];
 
-/** Version for `sentra --version`: CI tag (SENTRA_VERSION) → core package.json → "dev". */
+/** Version for `sentra --version`: core package.json → "dev". */
 function resolveVersion(): string {
-  const envVersion = process.env.SENTRA_VERSION;
-  if (envVersion) {
-    return envVersion;
-  }
   const parsed: unknown = JSON.parse(
     readFileSync(path.join(ROOT, "packages/core/package.json"), "utf8"),
   );

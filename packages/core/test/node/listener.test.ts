@@ -357,21 +357,117 @@ describe("toNodeListener with custom handlers", () => {
     });
   });
 
-  it("answers 500 when the response body fails before anything was sent", async () => {
-    const base = await listen(async () =>
-      Promise.resolve(
+  it("answers a clean 500 when the response body fails before anything was sent", async () => {
+    const base = await listen(async () => {
+      const headers = new Headers({ "content-encoding": "gzip", "x-custom": "1" });
+      headers.append("set-cookie", "session=1");
+      return Promise.resolve(
         new Response(
           new ReadableStream<Uint8Array>({
             start(controller) {
               controller.error(new Error("stream boom"));
             },
           }),
+          { headers },
         ),
-      ),
-    );
-    const response = await fetch(base);
+      );
+    });
+    const response = await rawRequest(base, {});
     expect(response.status).toBe(500);
-    expect(await response.json()).toMatchObject({ error: { code: "internal_error" } });
+    expect(response.headers["content-encoding"]).toBeUndefined();
+    expect(response.headers["set-cookie"]).toBeUndefined();
+    expect(response.headers["x-custom"]).toBeUndefined();
+    expect(response.headers["content-type"]).toBe("application/json");
+    expect(JSON.parse(response.chunks.join(""))).toEqual({
+      error: { code: "internal_error", message: "stream boom" },
+    });
+  });
+
+  describe("backpressure", () => {
+    const CHUNK = 64 * 1024;
+    const CHUNKS = 256;
+    let writeResults: boolean[] = [];
+
+    beforeEach(() => {
+      writeResults = [];
+      const original = http.ServerResponse.prototype.write;
+      vi.spyOn(http.ServerResponse.prototype, "write").mockImplementation(function write(
+        this: http.ServerResponse,
+        ...args: Parameters<typeof original>
+      ) {
+        const result = Reflect.apply(original, this, args);
+        writeResults.push(result);
+        return result;
+      });
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    function bigBody(onCancel: () => void): Response {
+      let sent = 0;
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          pull(controller) {
+            if (sent === CHUNKS) {
+              controller.close();
+              return;
+            }
+            sent += 1;
+            controller.enqueue(new Uint8Array(CHUNK).fill(97));
+          },
+          cancel: onCancel,
+        }),
+      );
+    }
+
+    it("waits for drain when the client reads slowly", async () => {
+      const base = await listen(async () => Promise.resolve(bigBody(() => undefined)));
+      const response = await new Promise<http.IncomingMessage>((resolve, reject) => {
+        http
+          .get(base, (incoming) => {
+            incoming.pause();
+            resolve(incoming);
+          })
+          .on("error", reject);
+      });
+      await vi.waitFor(() => {
+        expect(writeResults).toContain(false);
+      });
+      let received = 0;
+      response.on("data", (chunk: Buffer) => {
+        received += chunk.byteLength;
+      });
+      await new Promise<void>((resolve, reject) => {
+        response.on("end", resolve);
+        response.on("error", reject);
+        response.resume();
+      });
+      expect(received).toBe(CHUNK * CHUNKS);
+    });
+
+    it("stops writing when the client disconnects while waiting for drain", async () => {
+      let cancelled = false;
+      const base = await listen(async () =>
+        Promise.resolve(
+          bigBody(() => {
+            cancelled = true;
+          }),
+        ),
+      );
+      const request = http.get(base, (response) => {
+        response.pause();
+      });
+      request.on("error", () => undefined);
+      await vi.waitFor(() => {
+        expect(writeResults).toContain(false);
+      });
+      request.destroy();
+      await vi.waitFor(() => {
+        expect(cancelled).toBe(true);
+      });
+    });
   });
 
   it("aborts the request signal when the client disconnects", async () => {

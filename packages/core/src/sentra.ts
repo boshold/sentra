@@ -91,6 +91,10 @@ interface SentraInternals {
   mapFrames?: MapFramesStep;
 }
 
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function absoluteDir(dir: string): string {
   if (!path.isAbsolute(dir)) {
     throw new SentraConfigError("invalid_option", `source root must be absolute: ${dir}`);
@@ -131,7 +135,13 @@ async function createSentraWith(
   try {
     await retention.prune();
   } catch (error) {
-    await storage.close();
+    try {
+      await storage.close();
+    } catch (closeError) {
+      logger.error(`closing storage after failed retention failed: ${messageOf(closeError)}`, {
+        error: closeError,
+      });
+    }
     throw error;
   }
   retention.start();

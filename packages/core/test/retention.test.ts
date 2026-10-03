@@ -256,6 +256,17 @@ describe("retention in createSentra", () => {
     expect(closed).toBe(true);
   });
 
+  it("keeps the prune error and logs a failing close after a failed first pass", async () => {
+    const logger = recordingLogger();
+    const storage: StorageAdapter = {
+      ...storageWith({}),
+      pruneIdleSessions: async () => Promise.reject(new Error("prune boom")),
+      close: async () => Promise.reject(new Error("close boom")),
+    };
+    await expect(createSentra({ storage, logger })).rejects.toThrow("prune boom");
+    expect(logger.errors).toEqual(["closing storage after failed retention failed: close boom"]);
+  });
+
   it("stops the timer on close", async () => {
     const clearSpy = vi.spyOn(globalThis, "clearInterval");
     const sentra = await createSentra();

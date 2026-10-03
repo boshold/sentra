@@ -112,6 +112,10 @@ function writeInternalError(res: ServerResponse, error: unknown): void {
     res.destroy();
     return;
   }
+  // Drop headers copied from the failed response (e.g. content-encoding, set-cookie).
+  for (const name of res.getHeaderNames()) {
+    res.removeHeader(name);
+  }
   const body = JSON.stringify({ error: { code: "internal_error", message: messageOf(error) } });
   res.writeHead(500, {
     "content-type": "application/json",

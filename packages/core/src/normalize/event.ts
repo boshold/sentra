@@ -12,15 +12,13 @@ import {
   truncate,
 } from "#src/normalize/schemas.js";
 import { toIsoTimestamp } from "#src/normalize/time.js";
-import type { GroupingInput, NewItem, NormalizeContext } from "#src/normalize/types.js";
+import type { GroupingInput, NormalizeContext, NormalizeResult } from "#src/normalize/types.js";
 import type { EventData, Exception, Frame, Item, ItemSummary } from "#src/types.js";
 
 type EventPayload = Infer<typeof eventPayloadSchema>;
 type ExceptionValue = NonNullable<NonNullable<EventPayload["exception"]>["values"]>[number];
 
 type EventKind = "error" | "message";
-
-type NormalizeEventResult = { ok: true; items: NewItem[] } | { ok: false; error: string };
 
 const TITLE_MAX = 500;
 const UNKNOWN_TITLE = "<unknown error>";
@@ -194,7 +192,7 @@ function buildSummary(
   };
 }
 
-function normalizeEvent(payload: unknown, ctx: NormalizeContext): NormalizeEventResult {
+function normalizeEvent(payload: unknown, ctx: NormalizeContext): NormalizeResult {
   const input = payloadObjectSchema.safeParse(payload);
   const parsed = eventPayloadSchema.safeParse(payload);
   if (!input.success || !parsed.success) {
@@ -219,4 +217,3 @@ function normalizeEvent(payload: unknown, ctx: NormalizeContext): NormalizeEvent
 }
 
 export { normalizeEvent };
-export type { NormalizeEventResult };

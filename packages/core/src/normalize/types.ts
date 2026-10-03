@@ -21,3 +21,5 @@ export interface NewItem {
   grouping: GroupingInput | null;
   warnings: string[];
 }
+
+export type NormalizeResult = { ok: true; items: NewItem[] } | { ok: false; error: string };

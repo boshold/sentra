@@ -1,4 +1,4 @@
-import { parseTimestampMs, toIso, toIsoTimestamp } from "#src/normalize/time.js";
+import { durationMs, parseTimestampMs, toIso, toIsoTimestamp } from "#src/normalize/time.js";
 
 const FALLBACK = "2026-01-01T00:00:00.000Z";
 
@@ -30,5 +30,18 @@ describe("toIsoTimestamp", () => {
 
   it.each([[undefined], ["nope"], [Number.NaN]])("falls back for %j", (input) => {
     expect(toIsoTimestamp(input, FALLBACK)).toBe(FALLBACK);
+  });
+});
+
+describe("durationMs", () => {
+  it.each([
+    [10, 10.25, 250],
+    [1_791_021_162.7234492, 1_791_021_162.7236469, 0.198],
+    ["2024-10-03T10:06:40.000Z", "2024-10-03T10:06:41.500Z", 1500],
+    [11, 10, 0],
+    [undefined, 10, 0],
+    [10, "bad", 0],
+  ])("duration from %j to %j is %j", (start, end, expected) => {
+    expect(durationMs(start, end)).toBeCloseTo(expected, 3);
   });
 });

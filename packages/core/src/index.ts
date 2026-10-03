@@ -1,3 +1,4 @@
+export { buildDsn, parseDsnScope } from "#src/dsn.js";
 export {
   SentraConfigError,
   SentraEncodingError,
@@ -13,6 +14,7 @@ export type {
   SentraStorageErrorCode,
   SentraValidationErrorCode,
 } from "#src/errors.js";
+export { isIngestPath } from "#src/ingest/route.js";
 export type * from "#src/types.js";
 export { ITEM_KINDS, LEVELS } from "#src/types.js";
 export { VERSION } from "#src/util/version.js";

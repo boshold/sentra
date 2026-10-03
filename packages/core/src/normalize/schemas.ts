@@ -262,6 +262,17 @@ const eventPayloadSchema = looseObject({
   fingerprint: lenient(array(string())),
 });
 
+const traceContextSchema = looseObject({
+  trace_id: lenient(string()),
+  span_id: lenient(string()),
+  parent_span_id: lenient(string()),
+  op: lenient(string()),
+  status: lenient(string()),
+});
+
+/** `contexts.trace` of an event or transaction. */
+const contextsSchema = looseObject({ trace: lenient(traceContextSchema) });
+
 const transactionSpanSchema = looseObject({
   span_id: lenient(string()),
   parent_span_id: lenient(string()),
@@ -311,6 +322,8 @@ const logEntrySchema = looseObject({
 });
 
 export {
+  contextsSchema,
+  traceContextSchema,
   lenientArray,
   lenientRecord,
   lenient,

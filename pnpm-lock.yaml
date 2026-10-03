@@ -66,7 +66,7 @@ importers:
   packages/cli:
     dependencies:
       '@bosdev/sentra-core':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../core
       '@modelcontextprotocol/server':
         specifier: ^2.2.0

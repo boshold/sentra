@@ -12,13 +12,19 @@ on:
 permissions:
   contents: write
   id-token: write
+  attestations: write
 
 jobs:
   npm:
     name: Publish to npm
     runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
     steps:
+      # A workflow_dispatch re-run builds the tagged commit, not main.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - uses: pnpm/setup@5d160c5bc68a09337ad0d5654e237e03253b5879 # v1.0.0
         with:
           install: false
@@ -28,32 +34,47 @@ jobs:
           cache: pnpm
       # OIDC trusted publishing needs npm >= 11.5.1; Node 22 ships npm 10.
       - run: npm install -g npm@latest
-      - name: Resolve version from tag
-        run: echo "SENTRA_VERSION=${TAG#v}" >> "$GITHUB_ENV"
-        env:
-          TAG: ${{ inputs.tag || github.ref_name }}
       - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-      - name: Set package versions to tag
-        run: pnpm -r exec npm version "$SENTRA_VERSION" --no-git-tag-version --allow-same-version
-      # Auth via GitHub OIDC trusted publishing — NODE_AUTH_TOKEN="" so npm uses
-      # OIDC instead of a token. Each package needs a Trusted Publisher on npm
-      # (repo boshold/sentra, workflow release.yml). Idempotent: skip versions
-      # already on the registry so a partial-failure re-run can complete.
-      # Publish the pnpm-packed tarball: only pnpm rewrites workspace:* to the real version.
-      # Core before CLI: the CLI depends on the core version being published.
+      # Committed versions must equal the tag; no `npm version` here (it would trip the lockfile check).
+      - name: Check tag matches package versions
+        run: |
+          VERSION="${TAG#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          for dir in packages/core packages/cli; do
+            actual=$(node -p "require('./$dir/package.json').version")
+            if [ "$actual" != "$VERSION" ]; then
+              echo "::error::$dir has version $actual, tag $TAG expects $VERSION"
+              exit 1
+            fi
+          done
+      - run: pnpm typecheck && pnpm lint && pnpm build && pnpm test && pnpm test:integration
+      # Only pnpm rewrites workspace:^ to the real range, so npm publishes the pnpm-packed tarballs.
+      - name: Pack
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/artifacts"
+          pnpm --filter @bosdev/sentra-core pack --pack-destination "$GITHUB_WORKSPACE/artifacts"
+          pnpm --filter @bosdev/sentra-cli pack --pack-destination "$GITHUB_WORKSPACE/artifacts"
+          for tarball in artifacts/*.tgz; do
+            if tar -xOf "$tarball" package/package.json | grep -q "workspace:"; then
+              echo "::error::$tarball still contains a workspace: dependency"
+              exit 1
+            fi
+          done
+      # Auth via GitHub OIDC trusted publishing: NODE_AUTH_TOKEN="" so npm uses OIDC.
+      # Each package needs a Trusted Publisher on npm (repo boshold/sentra, workflow release.yml).
+      # Versions already on the registry are skipped, so a re-run after a partial failure completes.
+      # Core before CLI: the CLI depends on the published core version.
       - name: Publish packages
         env:
           NODE_AUTH_TOKEN: ""
         run: |
-          for dir in packages/core packages/cli; do
-            name=$(node -p "require('./$dir/package.json').name")
-            if npm view "$name@$SENTRA_VERSION" version >/dev/null 2>&1; then
-              echo "$name@$SENTRA_VERSION already published — skipping"
+          for pkg in core cli; do
+            name="@bosdev/sentra-$pkg"
+            if npm view "$name@$VERSION" version >/dev/null 2>&1; then
+              echo "$name@$VERSION already published, skipping"
               continue
             fi
-            tarball=$(cd "$dir" && pnpm pack --pack-destination "$RUNNER_TEMP" | tail -n 1)
-            npm publish "$tarball" --access public --provenance
+            npm publish "artifacts/bosdev-sentra-$pkg-$VERSION.tgz" --access public --provenance
           done
 
   release:
@@ -62,6 +83,8 @@ jobs:
     needs: npm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag || github.ref_name }}

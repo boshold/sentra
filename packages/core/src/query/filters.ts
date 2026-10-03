@@ -198,6 +198,10 @@ function resolvePage(input: unknown): ResolvedPage {
 }
 
 export {
+  issueShape,
+  itemShape,
+  scopeShape,
+  timeShape,
   issueFilterSchema,
   itemFilterSchema,
   itemKindSchema,

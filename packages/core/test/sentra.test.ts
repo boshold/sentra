@@ -345,7 +345,13 @@ describe("createSentra end to end", () => {
       storage: { type: "memory", driver: null, path: null },
       retention: "never idle, noise 2d",
     });
-    expect(instance.mcpTools()).toEqual([]);
+    expect(instance.mcpTools().map((tool) => tool.name)).toEqual([
+      "sentra_list_scopes",
+      "sentra_list_issues",
+      "sentra_get_issue",
+      "sentra_list_items",
+      "sentra_get_item",
+    ]);
     instance.addSourceRoot("/srv/app");
     instance.addSourceRoot("/srv/app");
     instance.removeSourceRoot("/srv/app");

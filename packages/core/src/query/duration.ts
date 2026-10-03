@@ -1,3 +1,5 @@
+import type { Duration } from "#src/types.js";
+
 const UNIT_MS = {
   ms: 1,
   s: 1000,
@@ -26,4 +28,8 @@ export function parseDuration(input: string): number | null {
 
 export function parseDurationOrNever(input: string): number | "never" | null {
   return input === "never" ? "never" : parseDuration(input);
+}
+
+export function isDuration(input: string): input is Duration {
+  return parseDuration(input) !== null;
 }

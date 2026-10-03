@@ -4,6 +4,7 @@ import { createIngestHandler } from "#src/ingest/handler.js";
 import { createPipeline } from "#src/ingest/pipeline.js";
 import type { MapFramesStep } from "#src/ingest/pipeline.js";
 import { createLiveBus } from "#src/live/bus.js";
+import { createMcpTools } from "#src/mcp/tools.js";
 import { normalizeEventId } from "#src/normalize/schemas.js";
 import { resolveOptions } from "#src/options.js";
 import type { ResolvedOptions, SentraOptions } from "#src/options.js";
@@ -206,7 +207,11 @@ async function createSentraWith(
     },
     prune: async () => retention.prune(),
     vacuum: async () => storage.vacuum(),
-    mcpTools: () => [],
+    mcpTools: () =>
+      createMcpTools({
+        query,
+        findIssues: async (idPrefix, scope) => storage.findIssues(idPrefix, scope),
+      }),
     info: () => ({
       version: VERSION,
       storage: { type: storage.type, driver: storageInfo.driver, path: storageInfo.path },

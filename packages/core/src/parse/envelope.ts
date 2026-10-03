@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { looseObject, number, string } from "zod";
 
 interface ParsedItem {
   header: Record<string, unknown> & { type: string };
@@ -18,9 +18,9 @@ type ParseEnvelopeResult = { ok: true; envelope: ParsedEnvelope } | { ok: false;
 const NEWLINE = 0x0a;
 const CARRIAGE_RETURN = 0x0d;
 
-const envelopeHeaderSchema = z.looseObject({});
-const itemHeaderSchema = z.looseObject({ type: z.string() });
-const lengthSchema = z.number().int().nonnegative();
+const envelopeHeaderSchema = looseObject({});
+const itemHeaderSchema = looseObject({ type: string() });
+const lengthSchema = number().int().nonnegative();
 
 const decoder = new TextDecoder();
 

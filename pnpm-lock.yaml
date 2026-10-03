@@ -89,9 +89,6 @@ importers:
       '@jridgewell/trace-mapping':
         specifier: ^0.3.31
         version: 0.3.31
-      '@sentry/core':
-        specifier: ^11.1.0
-        version: 11.1.0
       zod:
         specifier: ^4.4.3
         version: 4.6.5
@@ -108,6 +105,9 @@ importers:
       '@modelcontextprotocol/server':
         specifier: ^2.2.0
         version: 2.2.0
+      '@sentry/core':
+        specifier: ^11.1.0
+        version: 11.1.0
       '@types/better-sqlite3':
         specifier: ^9.6.0
         version: 9.6.0

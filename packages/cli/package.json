@@ -20,7 +20,8 @@
     "dist/**/*.mjs",
     "dist/**/*.d.ts",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE"
   ],
   "type": "module",
   "imports": {

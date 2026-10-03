@@ -17,7 +17,8 @@
     "dist/**/*.mjs",
     "dist/**/*.d.ts",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE"
   ],
   "type": "module",
   "imports": {
@@ -38,7 +39,6 @@
   },
   "dependencies": {
     "@jridgewell/trace-mapping": "^0.3.31",
-    "@sentry/core": "^11.1.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -46,6 +46,7 @@
     "@modelcontextprotocol/client": "^2.2.0",
     "@modelcontextprotocol/sdk": "^1.31.0",
     "@modelcontextprotocol/server": "^2.2.0",
+    "@sentry/core": "^11.1.0",
     "@types/better-sqlite3": "^9.6.0"
   },
   "optionalDependencies": {

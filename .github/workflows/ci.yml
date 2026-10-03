@@ -61,6 +61,8 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The CLI e2e tests spawn the built binary.
+      - run: pnpm build
       - run: pnpm test --coverage
         env:
           SENTRA_REQUIRE_SQLITE_DRIVERS: better-sqlite3,node

@@ -3,11 +3,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { Frame, Item, ItemFilter, ItemSummary, Sentra } from "@bosdev/sentra-core";
+import type { Frame, Item, Sentra } from "@bosdev/sentra-core";
 
-import { runScenario } from "./helpers/scenario.js";
+import { findOne, getFull, isKind, listAll, narrow, posts, runOk } from "./helpers/records.js";
 import { startSentraServer } from "./helpers/server.js";
-import type { RecordedRequest, SentraServer } from "./helpers/server.js";
+import type { SentraServer } from "./helpers/server.js";
 
 const SCOPE = { project: "my-app", session: "3f9a1c", service: "web" };
 const BASIC_FILE = "node-basic.mjs";
@@ -20,53 +20,6 @@ function scenarioPath(name: string): string {
   return fileURLToPath(new URL(`scenarios/${name}`, import.meta.url));
 }
 
-async function runOk(name: string, env: Record<string, string>): Promise<void> {
-  const result = await runScenario(scenarioPath(name), env);
-  // Node runtime warnings and their --trace-warnings hint are not failures.
-  const stderr = result.stderr
-    .split("\n")
-    .filter((line) => line !== "" && !/^\((?:node:|Use `node --trace-)/.test(line));
-  expect(stderr).toEqual([]);
-  expect(result.code).toBe(0);
-}
-
-async function listAll(sentra: Sentra, filter: ItemFilter = {}): Promise<ItemSummary[]> {
-  const page = await sentra.query.listItems(filter, { limit: 500 });
-  expect(page.nextCursor).toBeNull();
-  return page.items;
-}
-
-async function getFull(sentra: Sentra, summary: ItemSummary | undefined): Promise<Item> {
-  expect(summary).toBeDefined();
-  const item = summary === undefined ? null : await sentra.query.getItem(summary.id);
-  if (item === null) {
-    throw new Error("expected a stored record");
-  }
-  return item;
-}
-
-function isKind<K extends Item["kind"]>(item: Item, kind: K): item is Extract<Item, { kind: K }> {
-  return item.kind === kind;
-}
-
-function narrow<K extends Item["kind"]>(item: Item, kind: K): Extract<Item, { kind: K }> {
-  if (!isKind(item, kind)) {
-    throw new Error(`expected a ${kind} record, got ${item.kind}`);
-  }
-  return item;
-}
-
-async function findOne<K extends Item["kind"]>(
-  sentra: Sentra,
-  kind: K,
-  title: string,
-): Promise<Extract<Item, { kind: K }>> {
-  const all = await listAll(sentra, { kind });
-  const matches = all.filter((item) => item.title === title);
-  expect(matches).toHaveLength(1);
-  return narrow(await getFull(sentra, matches[0]), kind);
-}
-
 function exceptionFrames(item: Item): Frame[] {
   if (!isKind(item, "error")) {
     throw new Error(`expected an error record, got ${item.kind}`);
@@ -76,10 +29,6 @@ function exceptionFrames(item: Item): Frame[] {
 
 function framesOf(frames: Frame[], fileName: string): Frame[] {
   return frames.filter((frame) => frame.filename?.endsWith(`/${fileName}`) === true);
-}
-
-function posts(requests: RecordedRequest[]): RecordedRequest[] {
-  return requests.filter((request) => request.method === "POST");
 }
 
 beforeAll(async () => {
@@ -105,7 +54,7 @@ describe("node-basic scenario", () => {
   beforeAll(async () => {
     server = await startSentraServer();
     ({ sentra } = server);
-    await runOk(BASIC_FILE, { SENTRA_DSN: sentra.getDsn(SCOPE) });
+    await runOk(scenarioPath(BASIC_FILE), { SENTRA_DSN: sentra.getDsn(SCOPE) });
   });
 
   afterAll(async () => {
@@ -235,7 +184,7 @@ describe("node-static scenario", () => {
   beforeAll(async () => {
     server = await startSentraServer();
     ({ sentra } = server);
-    await runOk("node-static.mjs", { SENTRA_DSN: sentra.getDsn(SCOPE) });
+    await runOk(scenarioPath("node-static.mjs"), { SENTRA_DSN: sentra.getDsn(SCOPE) });
   });
 
   afterAll(async () => {
@@ -265,7 +214,10 @@ describe("node-modules-gzip scenario", () => {
   beforeAll(async () => {
     server = await startSentraServer();
     ({ sentra } = server);
-    await runOk(GZIP_FILE, { SENTRA_DSN: sentra.getDsn(SCOPE), FAKEPKG_PATH: fakepkgPath });
+    await runOk(scenarioPath(GZIP_FILE), {
+      SENTRA_DSN: sentra.getDsn(SCOPE),
+      FAKEPKG_PATH: fakepkgPath,
+    });
   });
 
   afterAll(async () => {
@@ -326,13 +278,15 @@ describe("node-tunnel scenario", () => {
   });
 
   it("short DSN → default scope", async () => {
-    await runOk("node-tunnel.mjs", { SENTRA_DSN: `http://sentra@127.0.0.1:${server.port}/1` });
+    await runOk(scenarioPath("node-tunnel.mjs"), {
+      SENTRA_DSN: `http://sentra@127.0.0.1:${server.port}/1`,
+    });
     const error = await findOne(sentra, "error", "Error: tunneled");
     expect(error.scope).toEqual({ project: "default", session: "default", service: "default" });
   });
 
   it("tunnel → scope from envelope header DSN", async () => {
-    await runOk("node-tunnel.mjs", {
+    await runOk(scenarioPath("node-tunnel.mjs"), {
       SENTRA_DSN: "http://sentra@example.invalid:9000/my-app/3f9a1c/api/1",
       SENTRA_TUNNEL: `${server.baseUrl}/api/1/envelope/`,
     });

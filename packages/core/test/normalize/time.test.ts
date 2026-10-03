@@ -41,6 +41,10 @@ describe("durationMs", () => {
     [11, 10, 0],
     [undefined, 10, 0],
     [10, "bad", 0],
+    [0, 1e308, 0],
+    [-1e308, 0, 0],
+    [0, 8.64e12, 8.64e15],
+    [0, 8.64e12 + 1, 0],
   ])("duration from %j to %j is %j", (start, end, expected) => {
     expect(durationMs(start, end)).toBeCloseTo(expected, 3);
   });

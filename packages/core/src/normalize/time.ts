@@ -18,10 +18,11 @@ function toIsoTimestamp(input: unknown, fallbackIso: string): string {
 }
 
 function toMsExact(input: unknown): number | null {
-  if (typeof input === "number") {
-    return Number.isFinite(input) ? input * 1000 : null;
+  if (typeof input !== "number") {
+    return parseTimestampMs(input);
   }
-  return parseTimestampMs(input);
+  const ms = input * 1000;
+  return Number.isFinite(ms) && Math.abs(ms) <= MAX_DATE_MS ? ms : null;
 }
 
 /** `(end - start)` in ms (µs precision); `0` if either is missing/invalid or the result is negative. */

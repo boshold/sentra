@@ -7,6 +7,12 @@ function transaction(payload: unknown) {
 }
 
 describe("normalizeTransaction", () => {
+  it("keeps durations finite for out-of-range timestamps", () => {
+    const item = transaction({ transaction: "bad duration", start_timestamp: 0, timestamp: 1e308 });
+    expect(item.data.durationMs).toBe(0);
+    expect(JSON.stringify(item.data)).toContain('"durationMs":0,');
+  });
+
   it("normalizes the static-lifecycle fixture", () => {
     const item = transaction(fixturePayload("node-transaction", "transaction"));
     expect(item).toMatchObject({

@@ -33,6 +33,35 @@ describe("createLimiter", () => {
     expect(started).toEqual([0, 1, 2, 3]);
   });
 
+  it("never exceeds max when a call lands right after a release", async () => {
+    const limit = createLimiter(2);
+    let active = 0;
+    let peak = 0;
+    const gates = [deferred(), deferred(), deferred(), deferred()];
+    async function run(gate: { promise: Promise<void> }): Promise<void> {
+      return limit(async () => {
+        active += 1;
+        peak = Math.max(peak, active);
+        await gate.promise;
+        active -= 1;
+      });
+    }
+    const runs = gates.slice(0, 3).map(run);
+    await Promise.resolve();
+    gates[0]?.resolve();
+    await gates[0]?.promise;
+    await Promise.resolve();
+    runs.push(run(gates[3] ?? deferred()));
+    await vi.waitFor(() => {
+      expect(active).toBe(2);
+    });
+    for (const gate of gates) {
+      gate.resolve();
+    }
+    await Promise.all(runs);
+    expect(peak).toBe(2);
+  });
+
   it("frees the slot when a task rejects", async () => {
     const limit = createLimiter(1);
     const failure = new Error("boom");

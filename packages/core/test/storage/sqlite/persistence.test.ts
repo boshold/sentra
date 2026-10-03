@@ -90,9 +90,7 @@ describe.each(drivers)("sqlite persistence with %s", (driverName) => {
       expect(await sentra.clear({})).toEqual({ itemsDeleted: 1 });
       const afterClear = await sentra.query.listIssues();
       expect(afterClear.items).toEqual([]);
-      await expect(sentra.prune()).resolves.toEqual(
-        expect.objectContaining({ sessionsDeleted: expect.any(Number) }),
-      );
+      expect(await sentra.prune()).toEqual({ sessionsDeleted: 0, itemsDeleted: 0 });
     } finally {
       await sentra.close();
     }

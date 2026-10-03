@@ -341,6 +341,9 @@ class MemoryStorage implements StorageAdapter {
   }
 
   public async pruneOldItems(kinds: ItemKind[], cutoff: Date): Promise<{ itemsDeleted: number }> {
+    if (kinds.length === 0) {
+      return { itemsDeleted: 0 };
+    }
     const kindSet = new Set(kinds);
     const limit = cutoff.getTime();
     const ids = [...this.#items.values()]

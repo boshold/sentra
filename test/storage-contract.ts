@@ -1143,6 +1143,17 @@ function runStorageContract(
         expect(await adapter.pruneOldItems(["log"], new Date(T0))).toEqual({ itemsDeleted: 0 });
         expect(await adapter.pruneOldItems(["log"], new Date(T0 + 1))).toEqual({ itemsDeleted: 1 });
       });
+
+      it("changes nothing without kinds", async () => {
+        const items = await write(adapter, {
+          receivedAt: iso(T0),
+          items: [{ kind: "log", itemType: "log" }],
+        });
+        const failed = await write(adapter, { receivedAt: iso(T0), parseError: "bad" });
+        expect(await adapter.pruneOldItems([], new Date(T0 + DAY))).toEqual({ itemsDeleted: 0 });
+        expect(await itemIds(adapter)).toEqual([only(items.items).id]);
+        expect(await adapter.getEnvelope(failed.envelope.id)).not.toBeNull();
+      });
     });
   });
 }

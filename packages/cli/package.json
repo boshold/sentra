@@ -34,7 +34,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@bosdev/sentra-core": "workspace:*"
+    "@bosdev/sentra-core": "workspace:*",
+    "cleye": "^2.7.0",
+    "zod": "^4.6.5"
   },
   "engines": {
     "node": ">=22.15"

@@ -14,9 +14,10 @@ export type {
   SentraStorageErrorCode,
   SentraValidationErrorCode,
 } from "#src/errors.js";
-export { isIngestPath } from "#src/ingest/route.js";
+export { isIngestPath, isScopeSegment } from "#src/ingest/route.js";
 export { toNodeListener } from "#src/node/listener.js";
 export type { SentraOptions } from "#src/options.js";
+export { isDuration, parseDuration, parseDurationOrNever } from "#src/query/duration.js";
 export {
   issueFilterSchema,
   itemFilterSchema,
@@ -40,6 +41,7 @@ export {
   renderScopeTable,
 } from "#src/render/item.js";
 export { createSentra } from "#src/sentra.js";
+export { parseAllowedHost } from "#src/sourcemaps/http-loader.js";
 export type { Sentra, SentraBlob, SentraInfo, SentraQuery } from "#src/sentra.js";
 export { memoryStorage } from "#src/storage/memory/index.js";
 export type { MemoryStorageOptions } from "#src/storage/memory/index.js";
@@ -48,4 +50,5 @@ export type { SqliteStorageOptions } from "#src/storage/sqlite/index.js";
 export type * from "#src/storage/types.js";
 export type * from "#src/types.js";
 export { ITEM_KINDS, LEVELS } from "#src/types.js";
+export { parseSize } from "#src/util/size.js";
 export { VERSION } from "#src/util/version.js";

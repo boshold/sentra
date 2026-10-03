@@ -68,6 +68,12 @@ importers:
       '@bosdev/sentra-core':
         specifier: workspace:*
         version: link:../core
+      cleye:
+        specifier: ^2.7.0
+        version: 2.7.0
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
 
   packages/core:
     dependencies:
@@ -1119,6 +1125,10 @@ packages:
   ajv@8.20.0:
     resolution: {integrity: sha512-Thbli+OlOj+iMPYFBVBfJ3OmCAnaSyNn4M1vz9T6Gka5Jt9ba/HIR56joy65tY6kx/FCF5VXNB819Y7/GUrBGA==}
 
+  ansis@4.2.0:
+    resolution: {integrity: sha512-HqZ5rWlFjGiV0tDm3UxxgNRqsOTniqoKZu0pIAfh7TZQMGuZK+hH0drySty0si0QXj1ieop4+SkSfPZBPPkHig==}
+    engines: {node: '>=14'}
+
   assertion-error@2.0.1:
     resolution: {integrity: sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA==}
     engines: {node: '>=12'}
@@ -1161,6 +1171,9 @@ packages:
   chai@6.2.2:
     resolution: {integrity: sha512-NUPRluOfOiTKBKvWPtSD4PhFvWCqOi0BGStNWs57X9js7XGTprSmFoz5F0tWhR4WPjNeR9jXqdC7/UpSJTnlRg==}
     engines: {node: '>=18'}
+
+  cleye@2.7.0:
+    resolution: {integrity: sha512-vSxO418kPRu+oNh6dit+ZMUQf0fQYifZs/2cP85RQqbMtnlJ0tshkxyiMZlKOhMntct4hgi1GC1DXUS5T/zoxA==}
 
   content-disposition@1.1.0:
     resolution: {integrity: sha512-5jRCH9Z/+DRP7rkvY83B+yGIGX96OYdJmzngqnw2SBSxqCFPd0w2km3s5iawpGX8krnwSGmF0FW5Nhr0Hfai3g==}
@@ -1730,6 +1743,9 @@ packages:
     resolution: {integrity: sha512-MpUEN2OodtUzxvKQl72cUF7RQ5EiHsGvSsVG0ia9c5RbWGL2CI4C7EpPS8UTBIplnlzZiNuV56w+FuNxy3ty2Q==}
     engines: {node: '>=10'}
 
+  terminal-columns@2.0.0:
+    resolution: {integrity: sha512-6IByuUjyNZJXUtwDNm+OIe62zgwwaRbH+WMNTcx05O2G5V9WhvluAAHJY8OvUdwmzMPpqAD/7EUpGdI6ae1aiQ==}
+
   tinybench@2.9.0:
     resolution: {integrity: sha512-0+DUvqWMValLmha6lr4kD8iAMK1HzV0/aKnCtWb9v9641TnP/MFb7Pc2bxoxQjTXAErryXVgUOfv2YqNllqGeg==}
 
@@ -1757,6 +1773,9 @@ packages:
     resolution: {integrity: sha512-Yiex1Ovn8z2xPpOWckIiysV1SSyRMY9BkLF++q0yKiDxCqRhosKfMg3janKkiLBwZ5c/YryloKwGZcrEmtwxKw==}
     engines: {node: '>=18.0.0'}
     hasBin: true
+
+  type-flag@4.5.2:
+    resolution: {integrity: sha512-v8O8xoLq3W6eKKYZvlyvk8LI46ryYkfnKrjGVdJzO+1LsxUu1ztvVAKFzQpphKQgS0ucinnbAiEGUbvibQmt/A==}
 
   type-is@2.1.0:
     resolution: {integrity: sha512-faYHw0anBbc/kWF3zFTEnxSFOAGUX9GFbOBthvDdLsIlEoWOFOtS0zgCiQYwIskL9iGXZL3kAXD8OoZ4GmMATA==}
@@ -2601,6 +2620,8 @@ snapshots:
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
 
+  ansis@4.2.0: {}
+
   assertion-error@2.0.1: {}
 
   ast-v8-to-istanbul@1.0.7:
@@ -2651,6 +2672,12 @@ snapshots:
       get-intrinsic: 1.3.0
 
   chai@6.2.2: {}
+
+  cleye@2.7.0:
+    dependencies:
+      ansis: 4.2.0
+      terminal-columns: 2.0.0
+      type-flag: 4.5.2
 
   content-disposition@1.1.0: {}
 
@@ -3269,6 +3296,8 @@ snapshots:
     dependencies:
       has-flag: 4.0.0
 
+  terminal-columns@2.0.0: {}
+
   tinybench@2.9.0: {}
 
   tinyexec@1.3.1: {}
@@ -3289,6 +3318,8 @@ snapshots:
       esbuild: 0.28.2
     optionalDependencies:
       fsevents: 2.3.3
+
+  type-flag@4.5.2: {}
 
   type-is@2.1.0:
     dependencies:

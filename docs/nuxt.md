@@ -1,6 +1,6 @@
 # Nuxt
 
-Draft of the README "Nuxt" section. Verified with Nuxt 4.5.2, `@sentry/nuxt` 11.4.0, Vite 8.3.2 and Node 24 in `nuxt dev`.
+Draft of the README "Nuxt" section. Verified with Nuxt 4.5.2, `@sentry/nuxt` 11.4.0 and Vite 8.3.2 in `nuxt dev`, on Node 24.21 and Node 22.23 (including the SSR plugin below).
 
 ## Setup
 
@@ -54,7 +54,7 @@ Sentry.init({
 Start the dev server with the Sentra DSN. Scope segments are `project/session/service`:
 
 ```bash
-NUXT_PUBLIC_SENTRY_DSN=http://sentra@localhost:8969/q12/s1/web/1 pnpm dev
+NUXT_PUBLIC_SENTRY_DSN=http://sentra@127.0.0.1:8969/q12/s1/web/1 pnpm dev
 ```
 
 Keep `enabled: true`. With `enabled: false` the SDK never calls `Sentry.init` and nothing is sent.
@@ -67,13 +67,13 @@ import { createSentra, memoryStorage, toNodeListener } from "@bosdev/sentra-core
 
 const sentra = await createSentra({
   storage: memoryStorage(),
-  publicUrl: "http://localhost:8969",
+  publicUrl: "http://127.0.0.1:8969",
   sourceMaps: { sourceRoots: ["/path/to/nuxt-app"] },
 });
-http.createServer(toNodeListener(sentra.handle)).listen(8969, "::");
+http.createServer(toNodeListener(sentra.handle)).listen(8969, "127.0.0.1");
 ```
 
-Roots can also be added at runtime with `sentra.addSourceRoot(dir)`. Listen on `::` (or on both loopback addresses): browsers may resolve `localhost` to `::1`.
+Roots can also be added at runtime with `sentra.addSourceRoot(dir)`. Sentra listens on `127.0.0.1` only; use `127.0.0.1` (not `localhost`) in the DSN, because browsers may resolve `localhost` to `::1`.
 
 ## What gets mapped
 
@@ -97,32 +97,44 @@ import { SourceMap } from "node:module";
 // @ts-expect-error virtual module from @nuxt/vite-builder (dev only)
 import runner from "#internal/nuxt/vite-node-runner.mjs";
 
+const INSTALLED = Symbol.for("sentra.ssrStackPositions");
 const FRAME = /(\(|at )([^()\s]+):(\d+):(\d+)(\)?)$/;
+const maps = new Map<string, { payload: unknown; map: SourceMap }>();
+
+function sourceMapFor(file: string): SourceMap | null {
+  const payload = runner.moduleCache.getSourceMap(file);
+  if (!payload) return null;
+  const cached = maps.get(file);
+  // The runner keeps one payload object per module version.
+  if (cached?.payload === payload) return cached.map;
+  const map = new SourceMap(payload);
+  maps.set(file, { payload, map });
+  return map;
+}
 
 function toOriginal(line: string): string {
   const match = FRAME.exec(line);
   if (!match) return line;
   const [, open, file, lineNo, colNo, close] = match;
-  const payload = runner.moduleCache.getSourceMap(file);
-  if (!payload) return line;
-  const entry = new SourceMap(payload).findEntry(Number(lineNo) - 1, Number(colNo) - 1);
-  if (!("originalLine" in entry)) return line;
+  const entry = sourceMapFor(file)?.findEntry(Number(lineNo) - 1, Number(colNo) - 1);
+  if (!entry || !("originalLine" in entry)) return line;
   return line.replace(
     FRAME,
     `${open}${file}:${entry.originalLine + 1}:${entry.originalColumn + 1}${close}`,
   );
 }
 
-const previous = Error.prepareStackTrace;
-
-Error.prepareStackTrace = (error, callSites) => {
-  const stack = previous
-    ? previous(error, callSites)
-    : [String(error), ...callSites.map((site) => `    at ${site}`)].join("\n");
-  return typeof stack === "string" ? stack.split("\n").map(toOriginal).join("\n") : stack;
-};
-
-export default defineNitroPlugin(() => {});
+export default defineNitroPlugin(() => {
+  if (Reflect.get(globalThis, INSTALLED) === true) return;
+  Reflect.set(globalThis, INSTALLED, true);
+  const previous = Error.prepareStackTrace;
+  Error.prepareStackTrace = (error, callSites) => {
+    const stack = previous
+      ? previous(error, callSites)
+      : [String(error), ...callSites.map((site) => `    at ${site}`)].join("\n");
+    return typeof stack === "string" ? stack.split("\n").map(toOriginal).join("\n") : stack;
+  };
+});
 ```
 
 With the plugin, SSR frames carry the original line and column (e.g. `app/pages/ssr-page.vue:4:9`), also for `Sentry.captureException`. Sentra still flags them with `positionReliable: false`, because the file on disk has no `sourceMappingURL`; the raw `lineno` / `colno` of the stored frame are correct.

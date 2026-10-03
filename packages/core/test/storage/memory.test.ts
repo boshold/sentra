@@ -69,6 +69,25 @@ describe("memoryStorage", () => {
     );
   });
 
+  it("never clones raw envelope bodies when copying metadata", async () => {
+    const storage = memoryStorage();
+    const batch = makeBatch({ parseError: "bad", body: new Uint8Array([1, 2, 3]) });
+    const clone = vi.spyOn(globalThis, "structuredClone");
+    try {
+      await storage.write(batch);
+      const page = await storage.listFailedEnvelopes({}, { limit: 10, cursor: null });
+      expect(page.items[0]).not.toHaveProperty("body");
+      const stored = await storage.getEnvelope(batch.envelope.id);
+      expect(stored?.body).toEqual(new Uint8Array([1, 2, 3]));
+      expect(clone).toHaveBeenCalled();
+      for (const [value] of clone.mock.calls) {
+        expect(value).not.toHaveProperty("body");
+      }
+    } finally {
+      clone.mockRestore();
+    }
+  });
+
   it("stores a copy of blob views", async () => {
     const storage = memoryStorage();
     const buffer = new Uint8Array(1024);

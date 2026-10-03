@@ -83,9 +83,8 @@ function toSummary(item: Item): ItemSummary {
 }
 
 function withoutBody(envelope: Envelope): Omit<Envelope, "body"> {
-  const copy = structuredClone(envelope);
-  delete copy.body;
-  return copy;
+  const { body: _body, ...metadata } = envelope;
+  return structuredClone(metadata);
 }
 
 function byIdDesc(a: { id: string }, b: { id: string }): number {

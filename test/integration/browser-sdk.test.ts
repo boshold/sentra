@@ -34,6 +34,9 @@ describe("browser sdk", () => {
   it("preflight", async () => {
     const preflights = server.requests.filter((request) => request.method === "OPTIONS");
     expect(preflights.some((request) => request.status === 204)).toBe(true);
+    expect(preflights.some((request) => request.headers.origin === "http://localhost:3000")).toBe(
+      true,
+    );
 
     const response = await fetch(`${server.baseUrl}/my-app/3f9a1c/web/api/1/envelope/`, {
       method: "OPTIONS",

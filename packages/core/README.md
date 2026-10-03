@@ -153,7 +153,7 @@ Filter fields:
 - Items: `kind`, `itemType`, `level`, `minLevel`, `environment`, `release`, `eventId`, `issueId`, `traceId`, `q` (case-insensitive substring of the title).
 - Issues: `kind` (`"error"` or `"message"`), `level`, `minLevel`, `q`.
 
-Pagination: `page = { limit, cursor }`, `limit` defaults to 50 (max 500). Pass `nextCursor` from the previous page as `cursor`; it is `null` on the last page. Invalid filters throw `SentraValidationError` (`invalid_filter`, `invalid_cursor`). The zod schemas are exported (`itemFilterSchema`, `issueFilterSchema`, `scopeFilterSchema`, `liveFilterSchema`, `pageInputSchema`, ...).
+Pagination: `page = { limit, cursor }`, `limit` defaults to 50; values above 500 are capped at 500. Pass `nextCursor` from the previous page as `cursor`; it is `null` on the last page. Invalid filters throw `SentraValidationError` (`invalid_filter`, `invalid_cursor`). The zod schemas are exported (`itemFilterSchema`, `issueFilterSchema`, `scopeFilterSchema`, `liveFilterSchema`, `pageInputSchema`, ...).
 
 ```ts
 const page = await sentra.query.listItems(

@@ -136,7 +136,7 @@ Each record that passes the filters is printed as it arrives:
 
 ## Query API
 
-JSON API under `/api/sentra`. Array parameters can be repeated or comma separated (`kind=error,message`). Unknown or repeated scalar parameters return `400 invalid_filter`. Lists are paginated with `limit` (default 50, max 500) and `cursor` (`nextCursor` of the previous page).
+JSON API under `/api/sentra`. Array parameters can be repeated or comma separated (`kind=error,message`). Unknown or repeated scalar parameters return `400 invalid_filter`. Lists are paginated with `limit` (default 50; values above 500 are capped at 500) and `cursor` (`nextCursor` of the previous page).
 
 | Route                                 | Parameters                                                                                                                                                                         | Response                                           | Errors                                      |
 | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------- |

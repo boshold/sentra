@@ -1,3 +1,5 @@
+import type BetterSqlite3 from "better-sqlite3";
+
 import { BUSY_TIMEOUT_MS } from "#src/storage/sqlite/driver/types.js";
 import type {
   SqliteDriver,
@@ -16,16 +18,22 @@ function normalizeRow(row: unknown): unknown {
   return out;
 }
 
-export async function openBetterSqlite3(path: string): Promise<SqliteDriver> {
-  const { default: Database } = await import("better-sqlite3");
-  // `new Database` loads the native addon; a broken binding fails here.
-  const db = new Database(path, { timeout: BUSY_TIMEOUT_MS });
+async function openDatabase(path: string): Promise<BetterSqlite3.Database> {
+  let db: BetterSqlite3.Database | undefined = undefined;
   try {
+    const { default: Database } = await import("better-sqlite3");
+    // `new Database` loads the native addon; a broken binding fails here.
+    db = new Database(path, { timeout: BUSY_TIMEOUT_MS });
     db.prepare("SELECT 1").get();
+    return db;
   } catch (error) {
-    db.close();
+    db?.close();
     throw error;
   }
+}
+
+export async function openBetterSqlite3(path: string): Promise<SqliteDriver> {
+  const db = await openDatabase(path);
 
   return {
     name: "better-sqlite3",

@@ -195,7 +195,7 @@ describe("withWriteTransaction", () => {
 });
 
 describe("loadDriver", () => {
-  afterEach(() => {
+  beforeEach(() => {
     vi.mocked(openBetterSqlite3).mockClear();
     vi.mocked(openNodeSqlite).mockClear();
   });
@@ -245,41 +245,77 @@ describe("loadDriver", () => {
 });
 
 describe("suppressSqliteExperimentalWarning", () => {
+  let emitWarning: ReturnType<typeof stubEmitWarning>;
+
+  function stubEmitWarning() {
+    return vi.spyOn(process, "emitWarning").mockImplementation(() => undefined);
+  }
+
+  function forwarded(): unknown[][] {
+    return emitWarning.mock.calls.map((call) => [...call]);
+  }
+
+  beforeEach(() => {
+    emitWarning = stubEmitWarning();
+  });
+
+  afterEach(() => {
+    emitWarning.mockRestore();
+  });
+
   it("drops only SQLite experimental warnings and restores emitWarning", async () => {
-    const original = process.emitWarning;
-    const seen: string[] = [];
-    function listener(warning: Error): void {
-      seen.push(`${warning.name}: ${warning.message}`);
-    }
-    process.on("warning", listener);
-    try {
-      const result = await suppressSqliteExperimentalWarning(async () => {
-        process.emitWarning("SQLite is an experimental feature", "ExperimentalWarning");
-        process.emitWarning("SQLite options", { type: "ExperimentalWarning" });
-        process.emitWarning("other", "DeprecationWarning");
-        process.emitWarning("Fetch is experimental", "ExperimentalWarning");
-        return "ok";
-      });
-      expect(result).toBe("ok");
-      expect(process.emitWarning).toBe(original);
-      await new Promise((resolve) => setImmediate(resolve));
-      expect(seen).toEqual([
-        "DeprecationWarning: other",
-        "ExperimentalWarning: Fetch is experimental",
-      ]);
-    } finally {
-      process.off("warning", listener);
-    }
+    const result = await suppressSqliteExperimentalWarning(async () => {
+      process.emitWarning("SQLite is an experimental feature", "ExperimentalWarning");
+      process.emitWarning("SQLite options", { type: "ExperimentalWarning" });
+      process.emitWarning("other", "DeprecationWarning");
+      process.emitWarning("Fetch is experimental", "ExperimentalWarning");
+      return "ok";
+    });
+    expect(result).toBe("ok");
+    expect(process.emitWarning).toBe(emitWarning);
+    expect(forwarded()).toEqual([
+      ["other", "DeprecationWarning"],
+      ["Fetch is experimental", "ExperimentalWarning"],
+    ]);
   });
 
   it("restores emitWarning when fn rejects", async () => {
-    const original = process.emitWarning;
     const failure = new Error("fail");
     await expect(
       suppressSqliteExperimentalWarning(async () => {
         throw failure;
       }),
     ).rejects.toBe(failure);
-    expect(process.emitWarning).toBe(original);
+    expect(process.emitWarning).toBe(emitWarning);
+  });
+
+  it("keeps filtering until the last overlapping call ends", async () => {
+    let releaseOuter = (): void => undefined;
+    let releaseInner = (): void => undefined;
+    const outerRun = suppressSqliteExperimentalWarning(
+      async () =>
+        new Promise<void>((resolve) => {
+          releaseOuter = resolve;
+        }),
+    );
+    const innerRun = suppressSqliteExperimentalWarning(
+      async () =>
+        new Promise<void>((resolve) => {
+          releaseInner = resolve;
+        }),
+    );
+
+    releaseOuter();
+    await outerRun;
+    expect(process.emitWarning).not.toBe(emitWarning);
+    process.emitWarning("SQLite is experimental", "ExperimentalWarning");
+
+    releaseInner();
+    await innerRun;
+    expect(process.emitWarning).toBe(emitWarning);
+    expect(forwarded()).toEqual([]);
+
+    await suppressSqliteExperimentalWarning(async () => undefined);
+    expect(process.emitWarning).toBe(emitWarning);
   });
 });

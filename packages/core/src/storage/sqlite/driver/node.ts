@@ -33,19 +33,40 @@ async function importDatabaseSync(): Promise<typeof DatabaseSync> {
   return mod.DatabaseSync;
 }
 
-export async function suppressSqliteExperimentalWarning<T>(fn: () => Promise<T>): Promise<T> {
+let activeFilters = 0;
+let savedEmitWarning: typeof process.emitWarning | undefined = undefined;
+
+/** Only the outermost of overlapping calls installs and restores the filter. */
+function installWarningFilter(): void {
+  activeFilters += 1;
+  if (activeFilters > 1) {
+    return;
+  }
   // oxlint-disable-next-line typescript-eslint/unbound-method -- restored as-is, called via Reflect.apply
   const original = process.emitWarning;
+  savedEmitWarning = original;
   process.emitWarning = function emitWarning(warning: string | Error, ...rest: unknown[]): void {
     if (isSqliteExperimentalWarning(warning, rest)) {
       return;
     }
     Reflect.apply(original, process, [warning, ...rest]);
   };
+}
+
+function removeWarningFilter(): void {
+  activeFilters -= 1;
+  if (activeFilters === 0 && savedEmitWarning) {
+    process.emitWarning = savedEmitWarning;
+    savedEmitWarning = undefined;
+  }
+}
+
+export async function suppressSqliteExperimentalWarning<T>(fn: () => Promise<T>): Promise<T> {
+  installWarningFilter();
   try {
     return await fn();
   } finally {
-    process.emitWarning = original;
+    removeWarningFilter();
   }
 }
 

@@ -73,7 +73,7 @@ describe("startServer", () => {
     const server = await startMemory();
     expect(server.port).toBeGreaterThan(0);
     expect(server.url).toBe(`http://127.0.0.1:${server.port}`);
-    expect(server.publicUrl).toBe(`http://localhost:${server.port}`);
+    expect(server.publicUrl).toBe(`http://127.0.0.1:${server.port}`);
     const fixture = loadEnvelopeFixture("node-error");
     const result = await httpRequest(server.port, {
       method: "POST",

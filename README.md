@@ -24,8 +24,8 @@ Startup banner:
 ```text
 sentra 0.1.0  listening on http://127.0.0.1:8969
 storage       sqlite ~/.local/share/sentra/sentra.db (driver: better-sqlite3, retention: 30d idle, noise 7d)
-DSN           http://sentra@localhost:8969/1
-scoped DSN    http://sentra@localhost:8969/<project>/<session>/<service>/1
+DSN           http://sentra@127.0.0.1:8969/1
+scoped DSN    http://sentra@127.0.0.1:8969/<project>/<session>/<service>/1
 query API     http://127.0.0.1:8969/api/sentra
 MCP           http://127.0.0.1:8969/mcp
 ```
@@ -35,7 +35,7 @@ Point the SDK at it:
 ```ts
 import * as Sentry from "@sentry/node";
 
-Sentry.init({ dsn: "http://sentra@localhost:8969/1" });
+Sentry.init({ dsn: "http://sentra@127.0.0.1:8969/1" });
 ```
 
 Errors, messages and logs are printed as they arrive:
@@ -72,15 +72,15 @@ The path segments before the trailing `1` set the scope of every record.
 
 | DSN                                                | project   | session   | service   |
 | -------------------------------------------------- | --------- | --------- | --------- |
-| `http://sentra@localhost:8969/1`                   | `default` | `default` | `default` |
-| `http://sentra@localhost:8969/my-app/1`            | `my-app`  | `default` | `default` |
-| `http://sentra@localhost:8969/my-app/3f9a1c/web/1` | `my-app`  | `3f9a1c`  | `web`     |
-| `http://sentra@localhost:8969/my-app/_/web/1`      | `my-app`  | `default` | `web`     |
+| `http://sentra@127.0.0.1:8969/1`                   | `default` | `default` | `default` |
+| `http://sentra@127.0.0.1:8969/my-app/1`            | `my-app`  | `default` | `default` |
+| `http://sentra@127.0.0.1:8969/my-app/3f9a1c/web/1` | `my-app`  | `3f9a1c`  | `web`     |
+| `http://sentra@127.0.0.1:8969/my-app/_/web/1`      | `my-app`  | `default` | `web`     |
 
 - A missing segment becomes `default`. `_` skips a middle segment.
 - Segments match `[A-Za-z0-9._-]{1,64}`. More than three segments or other characters are rejected with `400 invalid_scope`.
 - The public key (`sentra`) and the project id (`1`) are ignored. The SDK still checks them: the key must match `\w+` and the id must be digits.
-- `sentra dsn --project my-app --service web` prints `http://sentra@localhost:8969/my-app/_/web/1`.
+- `sentra dsn --project my-app --service web` prints `http://sentra@127.0.0.1:8969/my-app/_/web/1`.
 - With the SDK `tunnel` option the request URL has no scope segments (for example `http://127.0.0.1:8969/api/1/envelope/`). Sentra then reads the scope from the `dsn` in the envelope header.
 
 ## What gets stored
@@ -119,7 +119,7 @@ import { createSentra, sqliteStorage, toNodeListener } from "@bosdev/sentra-core
 
 const sentra = await createSentra({
   storage: sqliteStorage({ path: "/var/lib/my-host/sentra.db" }),
-  publicUrl: "http://localhost:8969",
+  publicUrl: "http://127.0.0.1:8969",
   retention: { maxIdle: "30d", noiseMaxAge: "7d" },
 });
 
@@ -127,7 +127,7 @@ createServer(toNodeListener(sentra.handle)).listen(8969, "127.0.0.1");
 
 sentra.addSourceRoot("/path/to/my-app");
 const dsn = sentra.getDsn({ project: "my-app", session: "3f9a1c", service: "web" });
-// http://sentra@localhost:8969/my-app/3f9a1c/web/1 -> pass as SENTRY_DSN to the service
+// http://sentra@127.0.0.1:8969/my-app/3f9a1c/web/1 -> pass as SENTRY_DSN to the service
 
 const unsubscribe = sentra.subscribe({ project: "my-app", session: "3f9a1c" }, (event) => {
   if (event.type === "item.created") console.log(event.item.kind, event.item.title);

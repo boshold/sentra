@@ -59,7 +59,7 @@ NUXT_PUBLIC_SENTRY_DSN=http://sentra@127.0.0.1:8969/my-app/3f9a1c/web/1 \
 pnpm dev
 ```
 
-`sentra dsn --project my-app --session 3f9a1c --service web --public-url http://127.0.0.1:8969` prints this DSN.
+`sentra dsn --project my-app --session 3f9a1c --service web` prints this DSN.
 
 Keep `enabled: true` in dev. With `enabled: false` the SDK never calls `Sentry.init` and nothing is sent.
 

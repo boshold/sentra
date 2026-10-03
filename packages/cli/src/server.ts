@@ -32,7 +32,7 @@ interface RunningServer {
   /** Listen URL, e.g. `http://127.0.0.1:8969`. */
   url: string;
   port: number;
-  /** Base URL for DSNs: `--public-url` or `http://localhost:<port>`. */
+  /** Base URL for DSNs: `--public-url` or `http://127.0.0.1:<port>`. */
   publicUrl: string;
   sentra: Sentra;
   /** Idempotent. */
@@ -186,7 +186,7 @@ async function startServer(
     throw error;
   }
   const port = boundPort(server);
-  const publicUrl = config.publicUrl ?? `http://localhost:${port}`;
+  const publicUrl = config.publicUrl ?? `http://127.0.0.1:${port}`;
   printBanner(config, io, sentra, { port, publicUrl });
   const unsubscribe = config.quiet ? null : subscribeLive(config, io.stdout, sentra);
 

@@ -20,7 +20,7 @@ import type { Duration, SentraLogger } from "#src/types.js";
 interface SentraOptions {
   /** Default `memoryStorage()`. */
   storage?: StorageAdapter;
-  /** Base URL used by `getDsn()`, e.g. `http://localhost:8969`. */
+  /** Base URL used by `getDsn()`, e.g. `http://127.0.0.1:8969`. */
   publicUrl?: string;
   retention?: {
     /** Default `"30d"`: delete a whole session after this time without events. */

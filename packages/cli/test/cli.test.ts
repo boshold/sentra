@@ -217,14 +217,14 @@ describe("sentra dsn", () => {
   it.each([
     [
       ["dsn", "--project", "my-app", "--service", "web"],
-      "http://sentra@localhost:8969/my-app/_/web/1",
+      "http://sentra@127.0.0.1:8969/my-app/_/web/1",
     ],
     [
       ["dsn", "--project", "my-app", "--session", "3f9a1c", "--service", "web"],
-      "http://sentra@localhost:8969/my-app/3f9a1c/web/1",
+      "http://sentra@127.0.0.1:8969/my-app/3f9a1c/web/1",
     ],
     [["dsn", "--public-url", "http://192.168.1.10:8969"], "http://sentra@192.168.1.10:8969/1"],
-    [["dsn"], "http://sentra@localhost:8969/1"],
+    [["dsn"], "http://sentra@127.0.0.1:8969/1"],
   ])("%j", async (argv, dsn) => {
     const result = await run(argv);
     expect(result).toEqual({ code: 0, stdout: `${dsn}\n`, stderr: "" });

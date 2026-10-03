@@ -5,7 +5,7 @@ const SQLITE: BannerInput = {
   version: "0.1.0",
   host: "127.0.0.1",
   port: 8969,
-  publicUrl: "http://localhost:8969",
+  publicUrl: "http://127.0.0.1:8969",
   storage: {
     type: "sqlite",
     driver: "better-sqlite3",
@@ -24,8 +24,8 @@ describe("renderBanner", () => {
     expect(renderBanner(SQLITE)).toEqual([
       "sentra 0.1.0  listening on http://127.0.0.1:8969",
       "storage       sqlite ~/.local/share/sentra/sentra.db (driver: better-sqlite3, retention: 30d idle, noise 7d)",
-      "DSN           http://sentra@localhost:8969/1",
-      "scoped DSN    http://sentra@localhost:8969/<project>/<session>/<service>/1",
+      "DSN           http://sentra@127.0.0.1:8969/1",
+      "scoped DSN    http://sentra@127.0.0.1:8969/<project>/<session>/<service>/1",
       "query API     http://127.0.0.1:8969/api/sentra",
       "MCP           http://127.0.0.1:8969/mcp",
     ]);

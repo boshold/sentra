@@ -27,7 +27,7 @@ Requires Node `>=22.15`. `better-sqlite3` is used when it is installed; otherwis
 Then initialize the SDK with the printed DSN:
 
 ```ts
-Sentry.init({ dsn: "http://sentra@localhost:8969/1" });
+Sentry.init({ dsn: "http://sentra@127.0.0.1:8969/1" });
 ```
 
 DSN format: `http://sentra@<host>:<port>/[project/][session/][service/]1`. A missing segment becomes `default`, `_` skips a middle segment, segments match `[A-Za-z0-9._-]{1,64}`.
@@ -37,8 +37,8 @@ DSN format: `http://sentra@<host>:<port>/[project/][session/][service/]1`. A mis
 ```text
 sentra 0.1.0  listening on http://127.0.0.1:8969
 storage       sqlite ~/.local/share/sentra/sentra.db (driver: better-sqlite3, retention: 30d idle, noise 7d)
-DSN           http://sentra@localhost:8969/1
-scoped DSN    http://sentra@localhost:8969/<project>/<session>/<service>/1
+DSN           http://sentra@127.0.0.1:8969/1
+scoped DSN    http://sentra@127.0.0.1:8969/<project>/<session>/<service>/1
 query API     http://127.0.0.1:8969/api/sentra
 MCP           http://127.0.0.1:8969/mcp
 ```
@@ -53,7 +53,7 @@ With `--format json` or `--quiet` the banner goes to stderr.
 | ------------------- | -------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | `--host`            | string                                 | `127.0.0.1`                       | Bind address                                                                                              |
 | `--port`, `-p`      | number                                 | `8969`                            | Port; `0` picks a free port (the banner shows it). Port in use: exit 1                                    |
-| `--public-url`      | URL                                    | `http://localhost:<port>`         | Base URL for printed DSNs                                                                                 |
+| `--public-url`      | URL                                    | `http://127.0.0.1:<port>`         | Base URL for printed DSNs                                                                                 |
 | `--storage`         | `memory` \| `sqlite`                   | `sqlite`                          | Storage                                                                                                   |
 | `--db`              | path                                   | `$XDG_DATA_HOME/sentra/sentra.db` | SQLite file; directories are created                                                                      |
 | `--sqlite-driver`   | `auto` \| `better-sqlite3` \| `node`   | `auto`                            | Force a SQLite driver                                                                                     |
@@ -89,7 +89,7 @@ Prints one DSN and exits.
 
 ```bash
 sentra dsn --project my-app --session 3f9a1c --service web
-# http://sentra@localhost:8969/my-app/3f9a1c/web/1
+# http://sentra@127.0.0.1:8969/my-app/3f9a1c/web/1
 sentra dsn --project my-app --service web --public-url http://192.168.1.20:8969
 # http://sentra@192.168.1.20:8969/my-app/_/web/1
 ```
@@ -97,7 +97,7 @@ sentra dsn --project my-app --service web --public-url http://192.168.1.20:8969
 | Flag                                  | Default                 | Description    |
 | ------------------------------------- | ----------------------- | -------------- |
 | `--project`, `--session`, `--service` | none                    | Scope segments |
-| `--public-url`                        | `http://localhost:8969` | Base URL       |
+| `--public-url`                        | `http://127.0.0.1:8969` | Base URL       |
 
 ## Exit codes
 

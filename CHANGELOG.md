@@ -23,7 +23,7 @@ First release.
 
 ### `@bosdev/sentra-cli`
 
-- `sentra` / `sentra start`: HTTP server on `127.0.0.1:8969` with a startup banner, SQLite storage under `$XDG_DATA_HOME/sentra/sentra.db` or memory storage.
+- `sentra` / `sentra start`: HTTP server on `127.0.0.1:8969` with a startup banner, SQLite storage under `$XDG_DATA_HOME/sentra/sentra.db` or memory storage. Printed DSNs use `http://127.0.0.1:<port>` unless `--public-url` is set.
 - Live terminal output (pretty or NDJSON) with kind, level and scope filters.
 - HTTP query API under `/api/sentra`, server-sent events at `/api/sentra/stream` and a stateless MCP endpoint at `/mcp`, protected by `Host` / `Origin` checks.
 - `sentra dsn` to print scoped DSNs.

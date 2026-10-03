@@ -91,7 +91,7 @@ describe.skipIf("Bun" in globalThis)("sentra CLI (built binary)", { timeout: 20_
       const out = cli.stdout();
       expect(out).toContain(`sentra ${version}  listening on http://127.0.0.1:${cli.port}`);
       expect(out).toMatch(/^storage {7}memory/m);
-      expect(out).toContain(`DSN           http://sentra@localhost:${cli.port}/1`);
+      expect(out).toContain(`DSN           http://sentra@127.0.0.1:${cli.port}/1`);
       expect(out).toContain("scoped DSN");
       expect(out).toContain(`query API     http://127.0.0.1:${cli.port}/api/sentra`);
       expect(out).toContain(`MCP           http://127.0.0.1:${cli.port}/mcp`);
@@ -334,7 +334,7 @@ describe.skipIf("Bun" in globalThis)("sentra CLI (built binary)", { timeout: 20_
       ]);
       expect(result).toMatchObject({
         code: 0,
-        stdout: "http://sentra@localhost:8969/my-app/3f9a1c/web/1\n",
+        stdout: "http://sentra@127.0.0.1:8969/my-app/3f9a1c/web/1\n",
       });
       const invalid = await runCliOnce(["dsn", "--project", "a/b"]);
       expect(invalid.code).toBe(2);
@@ -344,7 +344,7 @@ describe.skipIf("Bun" in globalThis)("sentra CLI (built binary)", { timeout: 20_
       const link = path.join(tempDir, "sentra");
       symlinkSync(cliEntry(), link);
       const result = await runCliOnce(["dsn"], undefined, link);
-      expect(result).toMatchObject({ code: 0, stdout: "http://sentra@localhost:8969/1\n" });
+      expect(result).toMatchObject({ code: 0, stdout: "http://sentra@127.0.0.1:8969/1\n" });
     });
   });
 });

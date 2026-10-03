@@ -36,7 +36,7 @@ import { createSentra, sqliteStorage, toNodeListener } from "@bosdev/sentra-core
 
 const sentra = await createSentra({
   storage: sqliteStorage({ path: "/var/lib/my-host/sentra.db" }),
-  publicUrl: "http://localhost:8969",
+  publicUrl: "http://127.0.0.1:8969",
   retention: { maxIdle: "30d", noiseMaxAge: "7d" },
 });
 
@@ -44,7 +44,7 @@ createServer(toNodeListener(sentra.handle)).listen(8969, "127.0.0.1");
 
 sentra.addSourceRoot("/path/to/my-app");
 const dsn = sentra.getDsn({ project: "my-app", session: "3f9a1c", service: "web" });
-// http://sentra@localhost:8969/my-app/3f9a1c/web/1 -> pass as SENTRY_DSN to the service
+// http://sentra@127.0.0.1:8969/my-app/3f9a1c/web/1 -> pass as SENTRY_DSN to the service
 
 const unsubscribe = sentra.subscribe({ project: "my-app", session: "3f9a1c" }, (event) => {
   if (event.type === "item.created") console.log(event.item.kind, event.item.title);
@@ -83,7 +83,7 @@ const issues = await sentra.query.listIssues({
 | Option                      | Default                                 | Description                                                                                 |
 | --------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `storage`                   | `memoryStorage()`                       | Storage adapter                                                                             |
-| `publicUrl`                 | none                                    | Base URL for `getDsn()`, e.g. `http://localhost:8969`                                       |
+| `publicUrl`                 | none                                    | Base URL for `getDsn()`, e.g. `http://127.0.0.1:8969`                                       |
 | `retention.maxIdle`         | `"30d"` (`DEFAULT_MAX_IDLE`)            | Delete a session after this time without events; duration or `"never"`                      |
 | `retention.noiseMaxAge`     | `"7d"` (`DEFAULT_NOISE_MAX_AGE`)        | Delete `span`, `transaction`, `log`, `other` records older than this; duration or `"never"` |
 | `limits.maxEnvelopeBytes`   | 20 MiB (`DEFAULT_MAX_ENVELOPE_BYTES`)   | Max envelope size, before and after decompression                                           |
@@ -116,13 +116,13 @@ On Bun, `auto` uses only `node:sqlite` (built into Bun `>=1.4`) and never loads 
 ```ts
 import { buildDsn, isIngestPath, parseDsnScope } from "@bosdev/sentra-core";
 
-buildDsn({ baseUrl: "http://localhost:8969", project: "my-app", service: "web" });
-// "http://sentra@localhost:8969/my-app/_/web/1"
+buildDsn({ baseUrl: "http://127.0.0.1:8969", project: "my-app", service: "web" });
+// "http://sentra@127.0.0.1:8969/my-app/_/web/1"
 
 sentra.getDsn({ project: "my-app", session: "3f9a1c", service: "web" });
 // uses the publicUrl option; throws SentraConfigError (missing_public_url) without it
 
-parseDsnScope("http://sentra@localhost:8969/my-app/3f9a1c/web/1");
+parseDsnScope("http://sentra@127.0.0.1:8969/my-app/3f9a1c/web/1");
 // { project: "my-app", session: "3f9a1c", service: "web" }
 
 isIngestPath("/my-app/3f9a1c/web/api/1/envelope/"); // true

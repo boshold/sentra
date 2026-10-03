@@ -186,7 +186,7 @@ const dsnSchema = object({
   project: segmentSchema.optional(),
   session: segmentSchema.optional(),
   service: segmentSchema.optional(),
-  publicUrl: publicUrlSchema.default(`http://localhost:${DEFAULT_PORT}`),
+  publicUrl: publicUrlSchema.default(`http://127.0.0.1:${DEFAULT_PORT}`),
 });
 
 const SIZE_UNITS = [

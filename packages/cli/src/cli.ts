@@ -33,7 +33,7 @@ const startFlags = {
   },
   publicUrl: {
     type: String,
-    description: "Base URL for printed DSNs (default http://localhost:<port>)",
+    description: "Base URL for printed DSNs (default http://127.0.0.1:<port>)",
   },
   storage: { type: String, description: "memory | sqlite (default sqlite)" },
   db: { type: String, description: "SQLite file (default $XDG_DATA_HOME/sentra/sentra.db)" },
@@ -86,7 +86,7 @@ const dsnFlags = {
   project: { type: String, description: "Project segment" },
   session: { type: String, description: "Session segment" },
   service: { type: String, description: "Service segment" },
-  publicUrl: { type: String, description: `Base URL (default http://localhost:${DEFAULT_PORT})` },
+  publicUrl: { type: String, description: `Base URL (default http://127.0.0.1:${DEFAULT_PORT})` },
 } satisfies Flags;
 
 /** Plain help when stdout is not a terminal; ansis already handles `NO_COLOR`. */

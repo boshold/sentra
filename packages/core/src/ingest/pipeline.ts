@@ -25,9 +25,7 @@ type IssueEntry = IngestBatch["issues"][number];
 
 const NO_GROUPING: GroupingInput = { payloadFingerprint: null, messageTemplate: null };
 
-async function identity(items: NewItem[]): Promise<NewItem[]> {
-  return Promise.resolve(items);
-}
+const identity: MapFramesStep = async (items) => items;
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -111,6 +109,16 @@ function createPipeline(deps: PipelineDeps): (ctx: IngestContext) => Promise<{ i
     }
   }
 
+  /** Frame mapping never fails ingest. */
+  async function mapFramesSafely(items: NewItem[], envelopeId: string): Promise<NewItem[]> {
+    try {
+      return await mapFrames(items);
+    } catch (error) {
+      logger.warn(`frame mapping failed: ${messageOf(error)}`, { error, envelopeId });
+      return items;
+    }
+  }
+
   async function ingestFailed(ctx: IngestContext, parseError: string): Promise<{ id: string }> {
     const envelope: Envelope = {
       id: uuidv7(),
@@ -147,7 +155,7 @@ function createPipeline(deps: PipelineDeps): (ctx: IngestContext) => Promise<{ i
         logger.debug(warning, { itemId: item.id, envelopeId });
       }
     }
-    const items = await mapFrames(normalized);
+    const items = await mapFramesSafely(normalized, envelopeId);
     const issues = groupItems(items, receivedAt);
     const envelope: Envelope = {
       id: envelopeId,

@@ -2,6 +2,7 @@ import { matchesItemFilter, matchesScope } from "#src/storage/match.js";
 import type { ResolvedLiveFilter } from "#src/storage/types.js";
 import type { LiveEvent, SentraLogger } from "#src/types.js";
 
+/** Events are shared between listeners: treat them as read-only. */
 type LiveListener = (event: LiveEvent) => void;
 
 interface LiveBus {

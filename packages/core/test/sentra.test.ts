@@ -12,7 +12,7 @@ import {
 } from "../../../test/fixtures/envelopes.js";
 import type { EnvelopeFixture } from "../../../test/fixtures/envelopes.js";
 
-import { storageWithWrite } from "./helpers/storage.js";
+import { storageWith } from "./helpers/storage.js";
 
 const EXPECTED_KINDS: Record<string, ItemKind[]> = {
   "browser-attachment": ["message", "attachment"],
@@ -201,6 +201,17 @@ describe("createSentra end to end", () => {
     expect(await instance.query.getIssue("0000000000000000")).toBeNull();
   });
 
+  it("returns issue details with latest null when the latest item is gone", async () => {
+    const instance = await sentra({
+      storage: storageWith({ getItem: async () => Promise.resolve(null) }),
+    });
+    await instance.handle(fixtureToRequest(loadEnvelopeFixture("node-error")));
+    const issues = await instance.query.listIssues();
+    const [issue] = issues.items;
+    const detail = await instance.query.getIssue(issue?.id ?? "");
+    expect(detail).toEqual({ ...issue, latest: null });
+  });
+
   it("keeps raw envelopes unless disabled", async () => {
     const fixture = loadEnvelopeFixture("node-gzip");
     const withRaw = await sentra();
@@ -238,7 +249,7 @@ describe("createSentra end to end", () => {
     const logger = errorLogger();
     const instance = await sentra({
       logger,
-      storage: storageWithWrite(async () => Promise.reject(new Error("disk full"))),
+      storage: storageWith({ write: async () => Promise.reject(new Error("disk full")) }),
     });
     const events: LiveEvent[] = [];
     instance.subscribe({}, (event) => events.push(event));
@@ -287,6 +298,16 @@ describe("createSentra end to end", () => {
     await expect(instance.query.listFailedEnvelopes({ since: "-5m" })).rejects.toMatchObject({
       code: "invalid_filter",
     });
+    // Non-literal objects skip excess property checks, so unknown keys reach runtime validation.
+    const scopeFilter = { project: "p", sevice: "x" };
+    await expect(instance.query.listScopes(scopeFilter)).rejects.toMatchObject({
+      code: "invalid_filter",
+    });
+    const kind: ItemKind = "error";
+    const liveFilter = { kind, since: "1h" };
+    expect(() => instance.subscribe(liveFilter, () => undefined)).toThrow(
+      expect.objectContaining({ code: "invalid_filter" }),
+    );
   });
 
   it("clears records and their issues", async () => {

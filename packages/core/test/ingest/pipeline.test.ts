@@ -10,7 +10,7 @@ import type { IngestBatch, StorageAdapter } from "#src/storage/types.js";
 import type { LiveEvent, MappedLocation } from "#src/types.js";
 
 import { loadEnvelopeFixture } from "../../../../test/fixtures/envelopes.js";
-import { storageWithWrite } from "../helpers/storage.js";
+import { storageWith } from "../helpers/storage.js";
 
 const RECEIVED_AT = new Date("2026-10-03T12:00:00.000Z");
 const SCOPE = { project: "p", session: "s", service: "web" };
@@ -24,13 +24,15 @@ interface Harness {
 }
 
 function spyStorage(order: string[], writes: IngestBatch[], fail = false): StorageAdapter {
-  return storageWithWrite(async (inner, batch) => {
-    order.push("write");
-    writes.push(batch);
-    if (fail) {
-      throw new Error("disk full");
-    }
-    return inner.write(batch);
+  return storageWith({
+    write: async (inner, batch) => {
+      order.push("write");
+      writes.push(batch);
+      if (fail) {
+        throw new Error("disk full");
+      }
+      return inner.write(batch);
+    },
   });
 }
 
@@ -251,6 +253,32 @@ describe("createPipeline", () => {
     expect(order).toEqual(["write", "envelope.failed"]);
     expect(events[0]).toMatchObject({ type: "envelope.failed", error: "disk full" });
     expect(events[0]?.type === "envelope.failed" && events[0].envelope).not.toHaveProperty("body");
+  });
+
+  it("logs a failing mapFrames step and continues with unmapped items", async () => {
+    const warnings: string[] = [];
+    const resolved = resolveOptions({
+      logger: {
+        debug: () => undefined,
+        info: () => undefined,
+        warn: (message: string) => warnings.push(message),
+        error: () => undefined,
+      },
+    });
+    const writes: IngestBatch[] = [];
+    const sink = createPipeline({
+      storage: spyStorage([], writes),
+      bus: createLiveBus(resolved.logger),
+      options: resolved,
+      logger: resolved.logger,
+      mapFrames: async () => Promise.reject(new Error("map boom")),
+    });
+    const response = await sink(fixtureContext("node-error"));
+    expect(response.id).toBe("5de6e5b4c2d54107b369e4ad5a6909cd");
+    expect(warnings).toEqual(["frame mapping failed: map boom"]);
+    const batch = onlyWrite(writes);
+    expect(batch.issues).toHaveLength(1);
+    expect(batch.items[0]?.item.issueId).toBe(batch.issues[0]?.id);
   });
 
   it("logs normalizer warnings at debug level", async () => {

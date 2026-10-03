@@ -146,8 +146,7 @@ async function createSentraWith(
       if (issue === null) {
         return null;
       }
-      const latest = await storage.getItem(issue.lastItemId);
-      return latest === null ? null : { ...issue, latest };
+      return { ...issue, latest: await storage.getItem(issue.lastItemId) };
     },
     listItems: async (filter, page) =>
       storage.listItems(resolveItemFilter(filter), resolvePage(page)),

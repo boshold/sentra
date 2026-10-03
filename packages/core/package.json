@@ -1,0 +1,45 @@
+{
+  "name": "@bosdev/sentra-core",
+  "version": "0.0.0",
+  "description": "Local Sentry-compatible event receiver: ingest handler, parser, issues, source maps, storage, query and live subscribe.",
+  "homepage": "https://github.com/boshold/sentra#readme",
+  "bugs": {
+    "url": "https://github.com/boshold/sentra/issues"
+  },
+  "license": "MIT",
+  "author": "Kevin Boshold",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/boshold/sentra.git",
+    "directory": "packages/core"
+  },
+  "files": [
+    "dist/**/*.mjs",
+    "dist/**/*.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "imports": {
+    "#src/*": "./src/*"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@sentry/core": "^11.1.0",
+    "zod": "^4.4.3"
+  },
+  "engines": {
+    "node": ">=22.15"
+  }
+}

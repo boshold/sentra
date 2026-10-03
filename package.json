@@ -1,0 +1,25 @@
+{
+  "name": "sentra",
+  "private": true,
+  "license": "MIT",
+  "author": "Kevin Boshold",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/boshold/sentra.git"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "tsx scripts/build.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json && pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=22.15"
+  },
+  "packageManager": "pnpm@10.34.3+sha512.f2c531b08829d7be7f03c90addc266615f9c5477463e4bf1d275cb263ce9ea57cf0d5599110d94649a9bb3fed9f0b5efcea74a7016b61532a24cb9ad87860c1d"
+}

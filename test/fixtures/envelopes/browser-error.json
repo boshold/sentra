@@ -1,0 +1,17 @@
+{
+  "name": "browser-error",
+  "scenario": "browser-error",
+  "sdk": {
+    "name": "sentry.javascript.browser",
+    "version": "11.1.0"
+  },
+  "method": "POST",
+  "path": "/my-app/3f9a1c/web/api/1/envelope/?sentry_version=7&sentry_key=sentra&sentry_client=sentry.javascript.browser%2F11.1.0",
+  "headers": {
+    "content-type": "text/plain;charset=UTF-8"
+  },
+  "bodyBytes": 1839,
+  "itemTypes": [
+    "event"
+  ]
+}

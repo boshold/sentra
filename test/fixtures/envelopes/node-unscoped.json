@@ -1,0 +1,15 @@
+{
+  "name": "node-unscoped",
+  "scenario": "node-unscoped",
+  "sdk": {
+    "name": "sentry.javascript.node",
+    "version": "11.1.0"
+  },
+  "method": "POST",
+  "path": "/api/1/envelope/?sentry_version=7&sentry_key=sentra&sentry_client=sentry.javascript.node%2F11.1.0",
+  "headers": {},
+  "bodyBytes": 4744,
+  "itemTypes": [
+    "event"
+  ]
+}

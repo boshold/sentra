@@ -152,6 +152,27 @@ beforeAll(async () => {
       }
       res.writeHead(200, { "content-type": "text/javascript", etag });
       res.end(`a();\nthrow 1;\n${versionMap}\n`);
+    } else if (pathname === "/ext-etag.js" || pathname === "/ext-plain.js") {
+      if (req.headers["if-none-match"] === '"js"') {
+        res.writeHead(304, { etag: '"js"' });
+        res.end();
+        return;
+      }
+      res.writeHead(200, { "content-type": "text/javascript", etag: '"js"' });
+      res.end(`a();\nthrow 1;\n//# sourceMappingURL=${pathname.slice(1)}.map\n`);
+    } else if (pathname === "/ext-etag.js.map" || pathname === "/ext-plain.js.map") {
+      const etag = `"map-v${mutable.version}"`;
+      const validated = pathname === "/ext-etag.js.map";
+      if (validated && req.headers["if-none-match"] === etag) {
+        res.writeHead(304, { etag });
+        res.end();
+        return;
+      }
+      res.writeHead(200, { "content-type": "application/json", ...(validated ? { etag } : {}) });
+      res.end(JSON.stringify({ ...moduleMap, sources: [`v${mutable.version}.ts`] }));
+    } else if (pathname === "/ignore-cond.js") {
+      res.writeHead(200, { "content-type": "text/javascript", etag: '"same"' });
+      res.end(`a();\nthrow 1;\n${versionMap}\n`);
     } else if (pathname === "/mut-plain.js") {
       js(`a();\nthrow 1;\n${versionMap}\n`);
     } else if (pathname === "/late-map.js") {
@@ -324,7 +345,41 @@ describe("resolveEvents", () => {
       expect(count("/mut-etag.js")).toBe(2);
       mutable.version = 2;
       expect(await sourceOf(instance, url)).toBe("v2.ts");
-      expect(count("/mut-etag.js")).toBe(4);
+      expect(count("/mut-etag.js")).toBe(3);
+    });
+
+    it("remaps when only the external map changes while the module answers 304", async () => {
+      const url = `${origin}/ext-etag.js`;
+      const instance = resolver({ now });
+      expect(await sourceOf(instance, url)).toBe("v1.ts");
+      expect(await sourceOf(instance, url)).toBe("v1.ts");
+      expect([count("/ext-etag.js"), count("/ext-etag.js.map")]).toEqual([2, 2]);
+      mutable.version = 2;
+      expect(await sourceOf(instance, url)).toBe("v2.ts");
+      expect(await sourceOf(instance, url)).toBe("v2.ts");
+      expect([count("/ext-etag.js"), count("/ext-etag.js.map")]).toEqual([4, 4]);
+    });
+
+    it("reloads an external map without validators after 30 s although the module is unchanged", async () => {
+      const url = `${origin}/ext-plain.js`;
+      const instance = resolver({ now });
+      expect(await sourceOf(instance, url)).toBe("v1.ts");
+      mutable.version = 2;
+      clock += 29_999;
+      expect(await sourceOf(instance, url)).toBe("v1.ts");
+      expect([count("/ext-plain.js"), count("/ext-plain.js.map")]).toEqual([2, 1]);
+      clock += 1;
+      expect(await sourceOf(instance, url)).toBe("v2.ts");
+      expect([count("/ext-plain.js"), count("/ext-plain.js.map")]).toEqual([3, 2]);
+    });
+
+    it("uses a 200 answer to a conditional request without fetching the module again", async () => {
+      const url = `${origin}/ignore-cond.js`;
+      const instance = resolver({ now });
+      expect(await sourceOf(instance, url)).toBe("v1.ts");
+      mutable.version = 2;
+      expect(await sourceOf(instance, url)).toBe("v2.ts");
+      expect(count("/ignore-cond.js")).toBe(2);
     });
 
     it("reloads a module without validators after 30 s", async () => {

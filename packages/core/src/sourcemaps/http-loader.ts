@@ -4,7 +4,7 @@ import {
   parseSourceMap,
   resolveMapReference,
 } from "#src/sourcemaps/extract.js";
-import type { HttpValidators, LoadResult } from "#src/sourcemaps/extract.js";
+import type { HttpCacheInfo, HttpValidators, LoadResult } from "#src/sourcemaps/extract.js";
 import { isAllowedUrl } from "#src/sourcemaps/hosts.js";
 
 interface HttpLoaderOptions {
@@ -16,8 +16,16 @@ interface HttpLoaderOptions {
 }
 
 type FetchResult =
-  | { ok: true; text: string; finalUrl: URL; headers: Headers }
+  | { ok: true; notModified: false; text: string; finalUrl: URL; headers: Headers }
+  | { ok: true; notModified: true }
   | { ok: false; reason: string };
+
+/** The cached entry is still current (all conditional requests answered `304`). */
+interface NotModified {
+  status: "not_modified";
+}
+
+type HttpLoadResult = LoadResult | NotModified;
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const MAX_REDIRECTS = 3;
@@ -76,16 +84,35 @@ interface FetchContext {
   options: HttpLoaderOptions;
   signal: AbortSignal;
   expectJavaScript: boolean;
+  /** Sent as `If-None-Match` / `If-Modified-Since`; `304` then means not modified. */
+  validators: HttpValidators | null;
+}
+
+function requestHeaders(validators: HttpValidators | null): Record<string, string> {
+  const headers: Record<string, string> = { accept: "*/*" };
+  const etag = validators?.etag ?? null;
+  const lastModified = validators?.lastModified ?? null;
+  if (etag !== null) {
+    headers["if-none-match"] = etag;
+  }
+  if (lastModified !== null) {
+    headers["if-modified-since"] = lastModified;
+  }
+  return headers;
 }
 
 async function fetchHop(current: URL, hop: number, context: FetchContext): Promise<FetchResult> {
-  const { options, signal, expectJavaScript } = context;
+  const { options, signal, expectJavaScript, validators } = context;
   const response = await fetch(current, {
     redirect: "manual",
     signal,
     credentials: "omit",
-    headers: { accept: "*/*" },
+    headers: requestHeaders(validators),
   });
+  if (response.status === 304 && validators !== null) {
+    await cancelBody(response);
+    return { ok: true, notModified: true };
+  }
   if (REDIRECT_STATUSES.has(response.status)) {
     await cancelBody(response);
     const location = response.headers.get("location");
@@ -110,19 +137,20 @@ async function fetchHop(current: URL, hop: number, context: FetchContext): Promi
   if (text === null) {
     return { ok: false, reason: "too_large" };
   }
-  return { ok: true, text, finalUrl: current, headers: response.headers };
+  return { ok: true, notModified: false, text, finalUrl: current, headers: response.headers };
 }
 
 async function fetchLimited(
   url: URL,
   options: HttpLoaderOptions,
   expectJavaScript: boolean,
+  validators: HttpValidators | null = null,
 ): Promise<FetchResult> {
   const timeout = AbortSignal.timeout(options.timeoutMs);
   const signal =
     options.signal === undefined ? timeout : AbortSignal.any([timeout, options.signal]);
   try {
-    return await fetchHop(url, 0, { options, signal, expectJavaScript });
+    return await fetchHop(url, 0, { options, signal, expectJavaScript, validators });
   } catch (error) {
     return { ok: false, reason: isTimeout(error, signal) ? "timeout" : "fetch_failed" };
   }
@@ -134,50 +162,74 @@ function validatorsOf(headers: Headers): HttpValidators | null {
   return etag === null && lastModified === null ? null : { etag, lastModified };
 }
 
-function toLoaded(
-  json: string,
-  sourcesBase: string,
-  validators: HttpValidators | null,
-): LoadResult {
+function toLoaded(json: string, sourcesBase: string, http: HttpCacheInfo): LoadResult {
   const map = parseSourceMap(json);
   return map === null
     ? { status: "failed", reason: "invalid_source_map" }
-    : { status: "loaded", map, sourcesBase, origin: "http", validators };
+    : { status: "loaded", map, sourcesBase, origin: "http", http };
 }
 
-/** Conditional GET of the module; `true` only for `304 Not Modified`. Never throws. */
-async function isModuleUnchanged(
-  url: URL,
-  validators: HttpValidators,
+async function loadExternalMap(
+  mapUrl: URL,
   options: HttpLoaderOptions,
-): Promise<boolean> {
-  const timeout = AbortSignal.timeout(options.timeoutMs);
-  const signal =
-    options.signal === undefined ? timeout : AbortSignal.any([timeout, options.signal]);
-  const headers: Record<string, string> = { accept: "*/*" };
-  if (validators.etag !== null) {
-    headers["if-none-match"] = validators.etag;
+  module: HttpValidators | null,
+  previousMap: HttpValidators | null,
+): Promise<HttpLoadResult> {
+  const mapResult = await fetchLimited(mapUrl, options, false, previousMap);
+  if (!mapResult.ok) {
+    return { status: "failed", reason: mapResult.reason };
   }
-  if (validators.lastModified !== null) {
-    headers["if-modified-since"] = validators.lastModified;
+  if (mapResult.notModified) {
+    return { status: "not_modified" };
   }
-  try {
-    const response = await fetch(url, { redirect: "manual", signal, credentials: "omit", headers });
-    await cancelBody(response);
-    return response.status === 304;
-  } catch {
-    return false;
-  }
+  return toLoaded(mapResult.text, mapResult.finalUrl.href, {
+    module,
+    mapUrl: mapUrl.href,
+    map: validatorsOf(mapResult.headers),
+  });
 }
 
-/** Fetches a module from an allowed dev server and returns its source map. Never throws. */
-async function loadHttpSourceMap(url: URL, options: HttpLoaderOptions): Promise<LoadResult> {
+function allowedMapUrl(mapUrl: URL, moduleUrl: URL, options: HttpLoaderOptions): boolean {
+  return mapUrl.origin === moduleUrl.origin && isAllowedUrl(mapUrl, options.allowedHosts);
+}
+
+/** The module answered 304; a map without validators is left to the cache TTL. */
+async function revalidateMap(
+  moduleUrl: URL,
+  options: HttpLoaderOptions,
+  previous: HttpCacheInfo | undefined,
+): Promise<HttpLoadResult> {
+  const mapHref = previous?.mapUrl ?? null;
+  const mapValidators = previous?.map ?? null;
+  if (previous === undefined || mapHref === null || mapValidators === null) {
+    return { status: "not_modified" };
+  }
+  const mapUrl = URL.parse(mapHref);
+  if (mapUrl === null || !allowedMapUrl(mapUrl, moduleUrl, options)) {
+    return { status: "failed", reason: "map_not_allowed" };
+  }
+  return loadExternalMap(mapUrl, options, previous.module, mapValidators);
+}
+
+/**
+ * Fetches a module from an allowed dev server and returns its source map. Never throws.
+ * With `previous`, the module and an external map are requested conditionally:
+ * `not_modified` when nothing changed; a changed module response is used as is.
+ */
+async function loadHttpSourceMap(
+  url: URL,
+  options: HttpLoaderOptions,
+  previous?: HttpCacheInfo,
+): Promise<HttpLoadResult> {
   if (!isAllowedUrl(url, options.allowedHosts)) {
     return { status: "skipped", reason: "host_not_allowed" };
   }
-  const moduleResult = await fetchLimited(url, options, true);
+  const moduleResult = await fetchLimited(url, options, true, previous?.module ?? null);
   if (!moduleResult.ok) {
     return { status: "failed", reason: moduleResult.reason };
+  }
+  if (moduleResult.notModified) {
+    return revalidateMap(url, options, previous);
   }
   const { finalUrl, headers, text } = moduleResult;
   const ref = findSourceMappingUrl(text) ?? headers.get("sourcemap") ?? headers.get("x-sourcemap");
@@ -188,20 +240,16 @@ async function loadHttpSourceMap(url: URL, options: HttpLoaderOptions): Promise<
   if (reference === null || reference.kind === "path") {
     return { status: "failed", reason: "invalid_source_map" };
   }
-  const validators = validatorsOf(headers);
+  const module = validatorsOf(headers);
   if (reference.kind === "inline") {
-    return toLoaded(reference.json, finalUrl.href, validators);
+    return toLoaded(reference.json, finalUrl.href, { module, mapUrl: null, map: null });
   }
   const mapUrl = new URL(reference.url);
-  if (mapUrl.origin !== finalUrl.origin || !isAllowedUrl(mapUrl, options.allowedHosts)) {
+  if (!allowedMapUrl(mapUrl, finalUrl, options)) {
     return { status: "failed", reason: "map_not_allowed" };
   }
-  const mapResult = await fetchLimited(mapUrl, options, false);
-  if (!mapResult.ok) {
-    return { status: "failed", reason: mapResult.reason };
-  }
-  return toLoaded(mapResult.text, mapResult.finalUrl.href, validators);
+  return loadExternalMap(mapUrl, options, module, null);
 }
 
-export { isModuleUnchanged, loadHttpSourceMap };
-export type { HttpLoaderOptions };
+export { loadHttpSourceMap };
+export type { HttpLoadResult, HttpLoaderOptions };

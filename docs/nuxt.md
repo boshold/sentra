@@ -162,4 +162,4 @@ Each error/message record has `data.sourceMaps` with `status` (`not_applicable`,
 
 Frames on hosts outside `sourceMaps.allowedHosts` (loopback by default) and files outside the source roots are not candidates: they are not listed in `errors`, and `status` is `not_applicable` when no frame is a candidate.
 
-Sentra caches source maps by URL. Before reusing a cached map it asks the dev server whether the module changed (`If-None-Match` / `If-Modified-Since`; Vite answers `304` when it did not). Servers that send no `ETag` or `Last-Modified` get the map reloaded after 30 s, and failed lookups such as `no_source_map` are retried after 5 s.
+Sentra caches source maps by URL. Before reusing a cached map it asks the dev server whether the module changed (`If-None-Match` / `If-Modified-Since`; Vite answers `304` when it did not), and for a separate `.map` file whether that changed too. A module or `.map` file sent without `ETag` / `Last-Modified` is reloaded after 30 s, and failed lookups such as `no_source_map` are retried after 5 s.

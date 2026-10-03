@@ -9,8 +9,8 @@ import {
   httpCacheKey,
   isCacheable,
 } from "#src/sourcemaps/cache.js";
-import type { CachedSource } from "#src/sourcemaps/cache.js";
-import type { HttpValidators, LoadResult } from "#src/sourcemaps/extract.js";
+import type { CacheEntry, CachedSource } from "#src/sourcemaps/cache.js";
+import type { HttpCacheInfo, LoadResult } from "#src/sourcemaps/extract.js";
 import {
   loadFsSourceMap,
   readSourceInsideRoots,
@@ -18,7 +18,8 @@ import {
   resolveRoots,
 } from "#src/sourcemaps/fs-loader.js";
 import { isAllowedUrl, normalizeAllowedHosts } from "#src/sourcemaps/hosts.js";
-import { isModuleUnchanged, loadHttpSourceMap } from "#src/sourcemaps/http-loader.js";
+import { loadHttpSourceMap } from "#src/sourcemaps/http-loader.js";
+import type { HttpLoadResult } from "#src/sourcemaps/http-loader.js";
 import { createBudget, createTraceMap, mapFrame } from "#src/sourcemaps/mapper.js";
 import type { Budget } from "#src/sourcemaps/mapper.js";
 import { classifyLocation, frameLocation } from "#src/sourcemaps/paths.js";
@@ -50,9 +51,8 @@ interface SourceMapResolver {
 interface Candidate {
   key: string;
   origin: "http" | "fs";
-  load: () => Promise<LoadResult>;
-  /** HTTP only: conditional request against the cached validators. */
-  isUnchanged?: (validators: HttpValidators) => Promise<boolean>;
+  /** With `previous` (HTTP only) the load is conditional and may answer `not_modified`. */
+  load: (previous?: HttpCacheInfo) => Promise<HttpLoadResult>;
 }
 
 interface ResolveContext {
@@ -131,6 +131,11 @@ async function toCached(result: LoadResult): Promise<CachedSource> {
   }
 }
 
+/** `not_modified` only answers a conditional load, which needs a cached entry. */
+function withoutNotModified(loaded: HttpLoadResult): LoadResult {
+  return loaded.status === "not_modified" ? { status: "failed", reason: "fetch_failed" } : loaded;
+}
+
 async function memo<T>(
   map: Map<string, Promise<T>>,
   key: string,
@@ -176,8 +181,7 @@ function createSourceMapResolver(options: SourceMapResolverOptions): SourceMapRe
       return {
         key: httpCacheKey(url),
         origin: "http",
-        load: async () => loadHttpSourceMap(url, loaderOptions),
-        isUnchanged: async (validators) => isModuleUnchanged(url, validators, loaderOptions),
+        load: async (previous) => loadHttpSourceMap(url, loaderOptions, previous),
       };
     }
     if (classified.kind === "file") {
@@ -194,49 +198,42 @@ function createSourceMapResolver(options: SourceMapResolverOptions): SourceMapRe
     return null;
   }
 
-  /** A fresh cache hit, after revalidation when the entry carries validators. */
-  async function cachedFor(
-    candidate: Candidate,
-    ctx: ResolveContext,
-  ): Promise<CachedSource | null> {
-    const cached = cache.get(candidate.key);
+  /** The unexpired cache entry, if any. */
+  function cachedEntry(key: string): CacheEntry | null {
+    const cached = cache.get(key);
     if (cached === undefined) {
       return null;
     }
     if (cached.expiresAt !== null && now() >= cached.expiresAt) {
-      cache.delete(candidate.key);
+      cache.delete(key);
       return null;
     }
-    const { validators } = cached;
-    const { isUnchanged } = candidate;
-    if (validators === null || isUnchanged === undefined) {
-      return cached.source;
-    }
-    // Out of budget, a possibly stale map beats none.
-    const unchanged = await ctx.limit(async () =>
-      ctx.budget.exceeded() ? true : isUnchanged(validators),
-    );
-    if (unchanged) {
-      return cached.source;
-    }
-    cache.delete(candidate.key);
-    return null;
+    return cached;
   }
 
+  /** Loads, or revalidates a cached entry; a revalidation that changed something replaces it. */
   async function load(candidate: Candidate, ctx: ResolveContext): Promise<CachedSource> {
-    const cached = await cachedFor(candidate, ctx);
-    if (cached !== null) {
-      return cached;
+    const cached = cachedEntry(candidate.key);
+    if (cached?.revalidate === null) {
+      return cached.source;
     }
+    const previous = cached?.revalidate ?? undefined;
     // Checked when the queued job starts, not when it was queued.
     const loaded = await ctx.limit(async () =>
-      ctx.budget.exceeded() ? BUDGET_EXCEEDED : candidate.load(),
+      ctx.budget.exceeded() ? BUDGET_EXCEEDED : candidate.load(previous),
     );
+    const outOfBudget =
+      loaded === BUDGET_EXCEEDED ||
+      (loaded.status === "failed" && loaded.reason === "timeout" && ctx.deadline.aborted);
+    if (cached !== null && (loaded.status === "not_modified" || outOfBudget)) {
+      // Out of budget, a possibly stale map beats none.
+      return cached.source;
+    }
     // A fetch aborted by the shared per-envelope deadline ran out of budget, not of fetch time.
-    const result: LoadResult =
-      loaded.status === "failed" && loaded.reason === "timeout" && ctx.deadline.aborted
-        ? BUDGET_EXCEEDED
-        : loaded;
+    const result: LoadResult = outOfBudget ? BUDGET_EXCEEDED : withoutNotModified(loaded);
+    if (cached !== null) {
+      cache.delete(candidate.key);
+    }
     const entry = await toCached(result);
     if (isCacheable(entry.result)) {
       cache.set(candidate.key, cacheEntryFor(entry, candidate.origin, now()));

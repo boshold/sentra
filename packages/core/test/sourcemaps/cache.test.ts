@@ -11,12 +11,12 @@ import {
   isCacheable,
 } from "#src/sourcemaps/cache.js";
 import type { CacheEntry, CachedSource } from "#src/sourcemaps/cache.js";
-import type { LoadResult, RawSourceMap } from "#src/sourcemaps/extract.js";
+import type { HttpCacheInfo, LoadResult, RawSourceMap } from "#src/sourcemaps/extract.js";
 
 const failed: CacheEntry = {
   source: { result: { status: "failed", reason: "no_source_map" }, traceMap: null },
   expiresAt: null,
-  validators: null,
+  revalidate: null,
 };
 
 describe("createSourceMapCache", () => {
@@ -49,7 +49,7 @@ describe("createSourceMapCache", () => {
         traceMap,
       },
       expiresAt: null,
-      validators: null,
+      revalidate: null,
     });
     expect(cache.get("a")?.source.traceMap).toBe(traceMap);
     cache.delete("a");
@@ -116,19 +116,14 @@ describe("cacheEntryFor", () => {
   function loaded(result: LoadResult): CachedSource {
     return { result, traceMap: null };
   }
-  const httpLoaded = (etag: string | null): CachedSource =>
-    loaded({
-      status: "loaded",
-      map,
-      sourcesBase: "http://localhost/a.js",
-      origin: "http",
-      validators: etag === null ? null : { etag, lastModified: null },
-    });
+  const module = { etag: '"v1"', lastModified: null };
+  const httpLoaded = (http: HttpCacheInfo | undefined): CachedSource =>
+    loaded({ status: "loaded", map, sourcesBase: "http://localhost/a.js", origin: "http", http });
 
   it("never expires fs entries", () => {
-    expect(cacheEntryFor(httpLoaded(null), "fs", 1000)).toMatchObject({
+    expect(cacheEntryFor(httpLoaded(undefined), "fs", 1000)).toMatchObject({
       expiresAt: null,
-      validators: null,
+      revalidate: null,
     });
   });
 
@@ -138,22 +133,39 @@ describe("cacheEntryFor", () => {
     expect(cacheEntryFor(source, "http", 1000)).toEqual({
       source,
       expiresAt: 6000,
-      validators: null,
+      revalidate: null,
     });
   });
 
-  it("expires http maps without validators after the unvalidated TTL", () => {
+  it.each([
+    ["no http info", undefined],
+    ["a module without validators", { module: null, mapUrl: null, map: null }],
+  ])("expires http maps with %s after the unvalidated TTL", (_name, http) => {
     expect(HTTP_UNVALIDATED_TTL_MS).toBe(30_000);
-    expect(cacheEntryFor(httpLoaded(null), "http", 1000)).toMatchObject({
+    expect(cacheEntryFor(httpLoaded(http), "http", 1000)).toMatchObject({
       expiresAt: 31_000,
-      validators: null,
+      revalidate: null,
     });
   });
 
-  it("keeps http maps with validators for revalidation", () => {
-    expect(cacheEntryFor(httpLoaded('"v1"'), "http", 1000)).toMatchObject({
+  it("keeps validated http maps for revalidation", () => {
+    const inline = { module, mapUrl: null, map: null };
+    expect(cacheEntryFor(httpLoaded(inline), "http", 1000)).toMatchObject({
       expiresAt: null,
-      validators: { etag: '"v1"', lastModified: null },
+      revalidate: inline,
+    });
+    const external = { module, mapUrl: "http://localhost/a.js.map", map: module };
+    expect(cacheEntryFor(httpLoaded(external), "http", 1000)).toMatchObject({
+      expiresAt: null,
+      revalidate: external,
+    });
+  });
+
+  it("revalidates the module but expires an external map without validators", () => {
+    const http = { module, mapUrl: "http://localhost/a.js.map", map: null };
+    expect(cacheEntryFor(httpLoaded(http), "http", 1000)).toMatchObject({
+      expiresAt: 31_000,
+      revalidate: http,
     });
   });
 });

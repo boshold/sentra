@@ -2,8 +2,9 @@ import { createServer } from "node:http";
 import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 
+import type { HttpCacheInfo } from "#src/sourcemaps/extract.js";
 import { LOOPBACK_HOSTS, isAllowedUrl, normalizeAllowedHosts } from "#src/sourcemaps/hosts.js";
-import { isModuleUnchanged, loadHttpSourceMap } from "#src/sourcemaps/http-loader.js";
+import { loadHttpSourceMap } from "#src/sourcemaps/http-loader.js";
 import type { HttpLoaderOptions } from "#src/sourcemaps/http-loader.js";
 
 type Handler = (req: IncomingMessage, res: ServerResponse) => void;
@@ -20,6 +21,8 @@ const mapJson = JSON.stringify(map);
 const inlineBase64 = `data:application/json;base64,${Buffer.from(mapJson).toString("base64")}`;
 const inlineUri = `data:application/json;charset=utf-8,${encodeURIComponent(mapJson)}`;
 const badMap = Buffer.from(JSON.stringify({ ...map, version: 2 })).toString("base64");
+
+const mapVersion = { current: 1 };
 
 let main: TestServer;
 let other: TestServer;
@@ -66,6 +69,32 @@ function routes(): Record<string, Handler> {
         return;
       }
       js(res, `//# sourceMappingURL=${inlineBase64}`, headers);
+    },
+    "/cond.js": (req, res) => {
+      if (req.headers["if-none-match"] === '"js"') {
+        res.writeHead(304, { etag: '"js"' });
+        res.end();
+        return;
+      }
+      js(res, "//# sourceMappingURL=cond.js.map", { etag: '"js"' });
+    },
+    "/cond.js.map": (req, res) => {
+      const etag = `"map-v${mapVersion.current}"`;
+      if (req.headers["if-none-match"] === etag) {
+        res.writeHead(304, { etag });
+        res.end();
+        return;
+      }
+      res.writeHead(200, { "content-type": "application/json", etag });
+      res.end(JSON.stringify({ ...map, sources: [`v${mapVersion.current}.ts`] }));
+    },
+    "/cond-plain-map.js": (req, res) => {
+      if (req.headers["if-none-match"] === '"js"') {
+        res.writeHead(304, { etag: '"js"' });
+        res.end();
+        return;
+      }
+      js(res, "//# sourceMappingURL=ext.js.map", { etag: '"js"' });
     },
     "/badmap.js": (_req, res) =>
       js(res, `//# sourceMappingURL=data:application/json;base64,${badMap}`),
@@ -167,14 +196,18 @@ describe("loadHttpSourceMap", () => {
       map,
       sourcesBase: `${main.origin}/ok.js?t=5`,
       origin: "http",
-      validators: null,
+      http: { module: null, mapUrl: null, map: null },
     });
   });
 
   it("keeps the module's ETag and Last-Modified as validators", async () => {
     expect(await load("/etag.js")).toMatchObject({
       status: "loaded",
-      validators: { etag: '"v1"', lastModified: "Wed, 01 Jan 2025 00:00:00 GMT" },
+      http: {
+        module: { etag: '"v1"', lastModified: "Wed, 01 Jan 2025 00:00:00 GMT" },
+        mapUrl: null,
+        map: null,
+      },
     });
   });
 
@@ -336,36 +369,95 @@ describe("isAllowedUrl", () => {
   });
 });
 
-describe("isModuleUnchanged", () => {
+describe("conditional loads", () => {
   const url = (path: string): URL => new URL(path, main.origin);
+  const v1 = { etag: '"v1"', lastModified: null };
 
-  it("is true only for 304 Not Modified", async () => {
-    expect(
-      await isModuleUnchanged(url("/etag.js"), { etag: '"v1"', lastModified: null }, options()),
-    ).toBe(true);
-    expect(
-      await isModuleUnchanged(url("/etag.js"), { etag: '"v2"', lastModified: null }, options()),
-    ).toBe(false);
-    expect(
-      await isModuleUnchanged(url("/ok.js"), { etag: null, lastModified: "x" }, options()),
-    ).toBe(false);
+  beforeEach(() => {
+    mapVersion.current = 1;
+    main.requests.length = 0;
+  });
+
+  async function first(path: string): Promise<HttpCacheInfo> {
+    const result = await loadHttpSourceMap(url(path), options());
+    if (result.status !== "loaded" || result.http === undefined) {
+      throw new Error(`not loaded: ${result.status}`);
+    }
+    return result.http;
+  }
+
+  it("keeps the validators and URL of an external map", async () => {
+    expect(await first("/cond.js")).toEqual({
+      module: { etag: '"js"', lastModified: null },
+      mapUrl: `${main.origin}/cond.js.map`,
+      map: { etag: '"map-v1"', lastModified: null },
+    });
+  });
+
+  it("is not_modified when module and map answer 304", async () => {
+    const previous = await first("/cond.js");
+    expect(await loadHttpSourceMap(url("/cond.js"), options(), previous)).toEqual({
+      status: "not_modified",
+    });
+    expect(main.requests).toEqual(["/cond.js", "/cond.js.map", "/cond.js", "/cond.js.map"]);
+  });
+
+  it("reloads the external map when only the map changed", async () => {
+    const previous = await first("/cond.js");
+    mapVersion.current = 2;
+    expect(await loadHttpSourceMap(url("/cond.js"), options(), previous)).toMatchObject({
+      status: "loaded",
+      map: { sources: ["v2.ts"] },
+      http: { map: { etag: '"map-v2"' } },
+    });
+  });
+
+  it("leaves an external map without validators to the cache TTL", async () => {
+    const previous = await first("/cond-plain-map.js");
+    expect(previous.map).toBeNull();
+    expect(await loadHttpSourceMap(url("/cond-plain-map.js"), options(), previous)).toEqual({
+      status: "not_modified",
+    });
+    expect(main.requests).toEqual(["/cond-plain-map.js", "/ext.js.map", "/cond-plain-map.js"]);
+  });
+
+  it("uses a 200 answer to the conditional request as the new module", async () => {
+    const previous = { module: { etag: '"other"', lastModified: null }, mapUrl: null, map: null };
+    expect(await loadHttpSourceMap(url("/ok.js"), options(), previous)).toMatchObject({
+      status: "loaded",
+      map,
+    });
+    expect(main.requests).toEqual(["/ok.js"]);
   });
 
   it("sends both validators", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
-    await isModuleUnchanged(url("/etag.js"), { etag: '"v1"', lastModified: "lm" }, options());
+    const module = { etag: '"v1"', lastModified: "lm" };
+    await loadHttpSourceMap(url("/etag.js"), options(), { module, mapUrl: null, map: null });
     const init = fetchSpy.mock.calls[0]?.[1];
     expect(new Headers(init?.headers).get("if-none-match")).toBe('"v1"');
     expect(new Headers(init?.headers).get("if-modified-since")).toBe("lm");
   });
 
-  it("is false when the request fails", async () => {
+  it("checks the cached map URL against the allowed hosts", async () => {
+    const previous = {
+      module: v1,
+      mapUrl: `http://127.0.0.1:${other.port}/x.map`,
+      map: v1,
+    };
+    expect(await loadHttpSourceMap(url("/etag.js"), options(), previous)).toEqual({
+      status: "failed",
+      reason: "map_not_allowed",
+    });
+  });
+
+  it("fails when the conditional request fails", async () => {
     expect(
-      await isModuleUnchanged(
-        url("/slow.js"),
-        { etag: '"v1"', lastModified: null },
-        options({ timeoutMs: 20 }),
-      ),
-    ).toBe(false);
+      await loadHttpSourceMap(url("/slow.js"), options({ timeoutMs: 20 }), {
+        module: v1,
+        mapUrl: null,
+        map: null,
+      }),
+    ).toEqual({ status: "failed", reason: "timeout" });
   });
 });

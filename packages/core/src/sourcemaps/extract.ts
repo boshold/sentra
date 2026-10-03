@@ -33,10 +33,18 @@ type MapReference =
   | { kind: "url"; url: string }
   | { kind: "path"; path: string };
 
-/** HTTP cache validators of the module response; `null` when the server sent none. */
+/** HTTP cache validators of a response. */
 interface HttpValidators {
   etag: string | null;
   lastModified: string | null;
+}
+
+/** What an HTTP-loaded map needs for conditional revalidation; `null` validators = none sent. */
+interface HttpCacheInfo {
+  module: HttpValidators | null;
+  /** External map URL; `null` for an inline map. */
+  mapUrl: string | null;
+  map: HttpValidators | null;
 }
 
 type LoadResult =
@@ -45,7 +53,7 @@ type LoadResult =
       map: RawSourceMap;
       sourcesBase: string;
       origin: "http" | "fs";
-      validators?: HttpValidators | null;
+      http?: HttpCacheInfo;
     }
   | { status: "unreliable"; reason: string }
   | { status: "skipped"; reason: string }
@@ -206,4 +214,4 @@ export {
   rawSourceMapSchema,
   resolveMapReference,
 };
-export type { HttpValidators, LoadResult, MapReference, RawSourceMap };
+export type { HttpCacheInfo, HttpValidators, LoadResult, MapReference, RawSourceMap };

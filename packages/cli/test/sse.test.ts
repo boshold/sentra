@@ -1,3 +1,4 @@
+import { ServerResponse, createServer } from "node:http";
 import { PassThrough } from "node:stream";
 
 import type { LiveEvent } from "@bosdev/sentra-core";
@@ -103,21 +104,23 @@ function hasEvents(count: number): (text: string) => boolean {
   return (text) => events(text).length >= count;
 }
 
+const FAILED_ENVELOPE = {
+  id: "e1",
+  scope: { project: "p", session: "s", service: "x" },
+  receivedAt: "2026-10-03T00:00:00.000Z",
+  header: {},
+  size: 1,
+  contentEncoding: null,
+  itemCount: 0,
+  parseError: "line1\nline2",
+  parseWarnings: [],
+};
+
 describe("formatSseEvent", () => {
   it("writes one data line", () => {
     const event: LiveEvent = {
       type: "envelope.failed",
-      envelope: {
-        id: "e1",
-        scope: { project: "p", session: "s", service: "x" },
-        receivedAt: "2026-10-03T00:00:00.000Z",
-        header: {},
-        size: 1,
-        contentEncoding: null,
-        itemCount: 0,
-        parseError: "line1\nline2",
-        parseWarnings: [],
-      },
+      envelope: FAILED_ENVELOPE,
       error: "line1\nline2",
     };
     const text = formatSseEvent(event);
@@ -238,7 +241,6 @@ describe("createStreamHandler", () => {
   it("tracks connections and refuses new ones after closeAll", async () => {
     const server = await boot();
     const handler = createStreamHandler({ sentra: server.sentra });
-    const { createServer } = await import("node:http");
     const http = createServer((req, res) => {
       void handler.listener(req, res);
     });
@@ -259,6 +261,56 @@ describe("createStreamHandler", () => {
     handler.closeAll();
     const refused = await httpRequest(port, { path: "/" });
     expect(refused.status).toBe(503);
+    await new Promise<void>((resolve) => {
+      http.close(() => {
+        resolve();
+      });
+    });
+  });
+
+  it("drops a client whose buffer exceeds 8 MiB", async () => {
+    const server = await boot();
+    const listeners: ((event: LiveEvent) => void)[] = [];
+    const unsubscribed = vi.fn();
+    const handler = createStreamHandler({
+      sentra: {
+        ...server.sentra,
+        subscribe: (_filter, listener) => {
+          listeners.push(listener);
+          return unsubscribed;
+        },
+      },
+    });
+    const destroyed = vi.fn();
+    const http = createServer((req, res) => {
+      res.on("close", destroyed);
+      void handler.listener(req, res);
+    });
+    await new Promise<void>((resolve) => {
+      http.listen(0, "127.0.0.1", resolve);
+    });
+    const address = http.address();
+    const port = address !== null && typeof address === "object" ? address.port : 0;
+    const controller = new AbortController();
+    aborts.push(controller);
+    await fetch(`http://127.0.0.1:${port}/`, { signal: controller.signal });
+    expect(handler.connections).toBe(1);
+    const write = vi.spyOn(ServerResponse.prototype, "write");
+    vi.spyOn(ServerResponse.prototype, "writableLength", "get").mockReturnValue(
+      8 * 1024 * 1024 + 1,
+    );
+    const destroy = vi.spyOn(ServerResponse.prototype, "destroy");
+    for (const listener of listeners) {
+      listener({ type: "envelope.failed", envelope: FAILED_ENVELOPE, error: "x" });
+    }
+    expect(destroy).toHaveBeenCalledOnce();
+    expect(write).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+    await vi.waitFor(() => {
+      expect(handler.connections).toBe(0);
+    });
+    expect(unsubscribed).toHaveBeenCalledOnce();
+    expect(destroyed).toHaveBeenCalledOnce();
     await new Promise<void>((resolve) => {
       http.close(() => {
         resolve();

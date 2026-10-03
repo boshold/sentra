@@ -2,6 +2,7 @@ import http from "node:http";
 import type { AddressInfo } from "node:net";
 
 import { toNodeListener } from "#src/node/listener.js";
+import type { NodeListenerOptions } from "#src/node/listener.js";
 import { createSentra } from "#src/sentra.js";
 import type { Sentra } from "#src/sentra.js";
 
@@ -25,8 +26,11 @@ afterEach(async () => {
   await Promise.all(instances.splice(0).map(async (instance) => instance.close()));
 });
 
-async function listen(handle: (request: Request) => Promise<Response>): Promise<string> {
-  const server = http.createServer(toNodeListener(handle));
+async function listen(
+  handle: (request: Request) => Promise<Response>,
+  options?: NodeListenerOptions,
+): Promise<string> {
+  const server = http.createServer(toNodeListener(handle, options));
   servers.push(server);
   await new Promise<void>((resolve) => {
     server.listen(0, "127.0.0.1", resolve);
@@ -380,6 +384,61 @@ describe("toNodeListener with custom handlers", () => {
     expect(response.headers["content-type"]).toBe("application/json");
     expect(JSON.parse(response.chunks.join(""))).toEqual({
       error: { code: "internal_error", message: "stream boom" },
+    });
+  });
+
+  describe("custom onError", () => {
+    function onError(res: http.ServerResponse, error: unknown): void {
+      res.writeHead(500, {
+        "content-type": "text/plain",
+        "x-seen": String(error instanceof Error),
+      });
+      res.end("custom");
+    }
+
+    it("is used when the handler throws", async () => {
+      const base = await listen(async () => Promise.reject(new Error("secret")), { onError });
+      const response = await rawRequest(base, {});
+      expect(response.status).toBe(500);
+      expect(response.headers["access-control-allow-origin"]).toBeUndefined();
+      expect(response.headers["x-seen"]).toBe("true");
+      expect(response.chunks.join("")).toBe("custom");
+    });
+
+    it("is used when the body fails before the first chunk, with response headers cleared", async () => {
+      const base = await listen(
+        async () =>
+          Promise.resolve(
+            new Response(
+              new ReadableStream<Uint8Array>({
+                start(controller) {
+                  controller.error(new Error("secret"));
+                },
+              }),
+              { headers: { "access-control-allow-origin": "*", "x-custom": "1" } },
+            ),
+          ),
+        { onError },
+      );
+      const response = await rawRequest(base, {});
+      expect(response.status).toBe(500);
+      expect(response.headers["access-control-allow-origin"]).toBeUndefined();
+      expect(response.headers["x-custom"]).toBeUndefined();
+      expect(response.chunks.join("")).toBe("custom");
+    });
+
+    it("is used when the request cannot be converted", async () => {
+      const handle = vi.fn(async () => Promise.resolve(new Response("unreachable")));
+      const base = await listen(handle, { onError });
+      vi.stubGlobal("Request", (): never => {
+        throw new TypeError("bad request");
+      });
+      const response = await rawRequest(base, {}).finally(() => {
+        vi.unstubAllGlobals();
+      });
+      expect(response.status).toBe(500);
+      expect(response.chunks.join("")).toBe("custom");
+      expect(handle).not.toHaveBeenCalled();
     });
   });
 

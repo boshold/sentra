@@ -49,32 +49,33 @@ function createMcpRoute(deps: { sentra: Sentra; version: string; logger: SentraL
 
   const handler = createMcpHandler(createServer, {
     onerror: (error) => {
-      logger.debug(`mcp: ${error.message}`);
+      logger.warn(`mcp: ${error.message}`);
     },
   });
-  async function fetchOrFail(request: Request): Promise<Response> {
-    try {
-      return await handler.fetch(request);
-    } catch (error) {
-      logger.error(`mcp request failed: ${messageOf(error)}`, { error });
-      return Response.json(
-        { jsonrpc: "2.0", id: null, error: { code: -32_603, message: "Internal error" } },
-        { status: 500 },
-      );
-    }
-  }
 
   async function serve(request: Request): Promise<Response> {
     // Stateless endpoint: client session ids are meaningless here.
     request.headers.delete("mcp-session-id");
-    const response = await fetchOrFail(request);
+    const response = await handler.fetch(request);
     const headers = new Headers(response.headers);
     headers.delete("mcp-session-id");
+    // No CORS on `/mcp`: cross-origin browser clients are rejected by design.
+    headers.delete("access-control-allow-origin");
     headers.set("x-content-type-options", "nosniff");
     return new Response(response.body, { status: response.status, headers });
   }
 
-  const forward = toNodeListener(serve);
+  // Any failure before the first byte (handler throw, body stream error) gets a generic JSON-RPC 500.
+  const forward = toNodeListener(serve, {
+    onError(res, error) {
+      logger.error(`mcp request failed: ${messageOf(error)}`, { error });
+      sendJson(res, 500, {
+        jsonrpc: "2.0",
+        id: null,
+        error: { code: -32_603, message: "Internal error" },
+      });
+    },
+  });
 
   function listener(req: IncomingMessage, res: ServerResponse): void {
     if (req.method !== "POST") {

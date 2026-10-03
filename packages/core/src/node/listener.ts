@@ -3,6 +3,14 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 type FetchHandler = (request: Request) => Promise<Response>;
 
+/** Writes the error response; called only before anything was sent, with all headers cleared. */
+type ErrorWriter = (res: ServerResponse, error: unknown) => void;
+
+interface NodeListenerOptions {
+  /** Replaces the default `500 internal_error` body (which includes the message and CORS `*`). */
+  onError?: ErrorWriter;
+}
+
 /** `duplex` is required for stream bodies but missing from the DOM lib types. */
 interface StreamingRequestInit extends RequestInit {
   duplex?: "half";
@@ -107,15 +115,7 @@ function writeHeaders(res: ServerResponse, response: Response, closeConnection: 
   }
 }
 
-function writeInternalError(res: ServerResponse, error: unknown): void {
-  if (res.headersSent) {
-    res.destroy();
-    return;
-  }
-  // Drop headers copied from the failed response (e.g. content-encoding, set-cookie).
-  for (const name of res.getHeaderNames()) {
-    res.removeHeader(name);
-  }
+function defaultErrorWriter(res: ServerResponse, error: unknown): void {
   const body = JSON.stringify({ error: { code: "internal_error", message: messageOf(error) } });
   res.writeHead(500, {
     "content-type": "application/json",
@@ -123,6 +123,20 @@ function writeInternalError(res: ServerResponse, error: unknown): void {
     "access-control-allow-origin": "*",
   });
   res.end(body);
+}
+
+function failWith(writeError: ErrorWriter): ErrorWriter {
+  return function fail(res, error) {
+    if (res.headersSent) {
+      res.destroy();
+      return;
+    }
+    // Drop headers copied from the failed response (e.g. content-encoding, set-cookie).
+    for (const name of res.getHeaderNames()) {
+      res.removeHeader(name);
+    }
+    writeError(res, error);
+  };
 }
 
 /** `true` on `drain`, `false` if the response closed first. */
@@ -154,7 +168,11 @@ async function cancelStream(
   }
 }
 
-async function writeBody(res: ServerResponse, body: ReadableStream<Uint8Array>): Promise<void> {
+async function writeBody(
+  res: ServerResponse,
+  body: ReadableStream<Uint8Array>,
+  fail: ErrorWriter,
+): Promise<void> {
   const reader = body.getReader();
   // A disconnected client must not leave an endless stream (e.g. SSE) pending.
   function onClose(): void {
@@ -173,7 +191,7 @@ async function writeBody(res: ServerResponse, body: ReadableStream<Uint8Array>):
     }
   } catch (error) {
     await cancelStream(reader);
-    writeInternalError(res, error);
+    fail(res, error);
     return;
   } finally {
     res.off("close", onClose);
@@ -185,13 +203,14 @@ async function writeBody(res: ServerResponse, body: ReadableStream<Uint8Array>):
 
 async function respond(
   handle: FetchHandler,
-  request: Request,
+  req: IncomingMessage,
   res: ServerResponse,
+  context: { signal: AbortSignal; fail: ErrorWriter },
 ): Promise<Response | null> {
   try {
-    return await handle(request);
+    return await handle(toRequest(req, context.signal));
   } catch (error) {
-    writeInternalError(res, error);
+    context.fail(res, error);
     return null;
   }
 }
@@ -200,6 +219,7 @@ async function serve(
   handle: FetchHandler,
   req: IncomingMessage,
   res: ServerResponse,
+  fail: ErrorWriter,
 ): Promise<void> {
   const controller = new AbortController();
   function abort(): void {
@@ -218,7 +238,7 @@ async function serve(
     req.resume();
   }
 
-  const response = await respond(handle, toRequest(req, controller.signal), res);
+  const response = await respond(handle, req, res, { signal: controller.signal, fail });
   if (response === null) {
     return;
   }
@@ -234,26 +254,32 @@ async function serve(
     res.end();
     return;
   }
-  await writeBody(res, response.body);
+  await writeBody(res, response.body, fail);
 }
 
 async function serveSafely(
   handle: FetchHandler,
   req: IncomingMessage,
   res: ServerResponse,
+  fail: ErrorWriter,
 ): Promise<void> {
   try {
-    await serve(handle, req, res);
+    await serve(handle, req, res, fail);
   } catch (error) {
-    writeInternalError(res, error);
+    fail(res, error);
   }
 }
 
 /** Mounts a fetch-style handler on `node:http`; streams request and response bodies. */
-function toNodeListener(handle: FetchHandler): (req: IncomingMessage, res: ServerResponse) => void {
+function toNodeListener(
+  handle: FetchHandler,
+  options: NodeListenerOptions = {},
+): (req: IncomingMessage, res: ServerResponse) => void {
+  const fail = failWith(options.onError ?? defaultErrorWriter);
   return function listener(req, res) {
-    void serveSafely(handle, req, res);
+    void serveSafely(handle, req, res, fail);
   };
 }
 
 export { toNodeListener };
+export type { NodeListenerOptions };

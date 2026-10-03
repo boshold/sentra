@@ -78,6 +78,7 @@ jobs:
       # Each package needs a Trusted Publisher on npm (repo boshold/sentra, workflow release.yml).
       # Versions already on the registry are skipped, so a re-run after a partial failure completes.
       # Core before CLI: the CLI depends on the published core version.
+      # The ./ prefix stops npm from reading "artifacts/x.tgz" as a GitHub repo shorthand.
       - name: Publish packages
         env:
           NODE_AUTH_TOKEN: ""
@@ -88,7 +89,7 @@ jobs:
               echo "$name@$VERSION already published, skipping"
               continue
             fi
-            npm publish "artifacts/bosdev-sentra-$pkg-$VERSION.tgz" --access public --provenance
+            npm publish "./artifacts/bosdev-sentra-$pkg-$VERSION.tgz" --access public --provenance
           done
 
   release:

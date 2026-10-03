@@ -459,6 +459,42 @@ describe("resolveEvents", () => {
       expect(errors[50]).toEqual({ absPath: `${origin}/cap-50.js`, reason: "too_many_candidates" });
     });
 
+    async function appModule(name: string): Promise<string> {
+      const map = inline({ version: 3, sources: ["a.ts"], names: [], mappings: "AAAA" });
+      return write(`cap-fs/${name}.js`, `app();\n${map}\n`);
+    }
+
+    function outsideFiles(length: number): Frame[] {
+      return Array.from({ length }, (_, index) =>
+        frame(path.join(base, `outside/lib-${index}.js`)),
+      );
+    }
+
+    it("does not spend load slots on files outside the source roots", async () => {
+      const file = await appModule("after-50");
+      const data = event([...outsideFiles(50), frame(file)]);
+      await resolver().resolveEvents([data]);
+      expect(data.sourceMaps).toEqual({
+        status: "full",
+        candidateFrames: 1,
+        mappedFrames: 1,
+        errors: [],
+      });
+    });
+
+    it("caps root checks at 200 per envelope in frame order", async () => {
+      const early = await appModule("early");
+      const late = await appModule("late");
+      const data = event([frame(early), ...outsideFiles(199), frame(late)]);
+      await resolver().resolveEvents([data]);
+      expect(data.sourceMaps).toEqual({
+        status: "partial",
+        candidateFrames: 2,
+        mappedFrames: 1,
+        errors: [{ absPath: late, reason: "too_many_candidates" }],
+      });
+    });
+
     it("checks the budget when a queued fetch starts", async () => {
       let clock = 0;
       vi.spyOn(performance, "now").mockImplementation(() => clock);

@@ -62,13 +62,23 @@ interface ResolveContext {
   realRoots: string[];
   /** Identifies `realRoots`; FS cache entries from other roots are stale. */
   rootsKey: string;
-  /** Locations admitted as candidates, in frame order; capped at `MAX_CANDIDATES`. */
-  admitted: Set<string>;
+  /** Admission per location, decided in frame order. */
+  admissions: Map<string, Promise<Admission>>;
+  /** The last queued admission; the next one waits for it. */
+  admissionTail: Promise<unknown>;
+  /** File locations root-checked so far; capped at `MAX_ROOT_CHECKS`. */
+  rootChecks: number;
+  /** Eligible locations given a load slot; capped at `MAX_CANDIDATES`. */
+  slots: number;
   limit: Limiter;
-  candidates: Map<string, Promise<Candidate | null>>;
   loads: Map<string, Promise<CachedSource>>;
   sources: Map<string, Promise<string | null>>;
 }
+
+type Admission =
+  | { kind: "candidate"; candidate: Candidate }
+  | { kind: "ineligible" }
+  | { kind: "capped" };
 
 type FrameOutcome =
   | { kind: "none" }
@@ -79,6 +89,9 @@ const MAX_ERRORS = 50;
 /** Per envelope: bounds the work an untrusted sender can trigger. */
 const MAX_CONCURRENT_LOADS = 8;
 const MAX_CANDIDATES = 50;
+const MAX_ROOT_CHECKS = 200;
+const INELIGIBLE: Admission = { kind: "ineligible" };
+const CAPPED: Admission = { kind: "capped" };
 const BUDGET_EXCEEDED: LoadResult = { status: "failed", reason: "budget_exceeded" };
 const NOT_APPLICABLE: SourceMapInfo = {
   status: "not_applicable",
@@ -255,22 +268,55 @@ function createSourceMapResolver(options: SourceMapResolverOptions): SourceMapRe
     return entry;
   }
 
+  /**
+   * Must be called synchronously in frame order: root checks are counted here and load slots
+   * are handed out along `admissionTail`, so only eligible files use them, deterministically.
+   */
+  async function admit(location: string, ctx: ResolveContext): Promise<Admission> {
+    const existing = ctx.admissions.get(location);
+    if (existing !== undefined) {
+      return existing;
+    }
+    const isFile = classifyLocation(location).kind === "file";
+    if (isFile && ctx.rootChecks >= MAX_ROOT_CHECKS) {
+      ctx.admissions.set(location, Promise.resolve(CAPPED));
+      return CAPPED;
+    }
+    if (isFile) {
+      ctx.rootChecks += 1;
+    }
+    const classified = classify(location, ctx);
+    const previous = ctx.admissionTail;
+    const admission = (async (): Promise<Admission> => {
+      const candidate = await classified;
+      await previous;
+      if (candidate === null) {
+        return INELIGIBLE;
+      }
+      if (ctx.slots >= MAX_CANDIDATES) {
+        return CAPPED;
+      }
+      ctx.slots += 1;
+      return { kind: "candidate", candidate };
+    })();
+    ctx.admissions.set(location, admission);
+    ctx.admissionTail = admission;
+    return admission;
+  }
+
   async function resolveFrame(frame: Frame, ctx: ResolveContext): Promise<FrameOutcome> {
     const location = frameLocation(frame);
     if (location === null || !isPossibleCandidate(location)) {
       return { kind: "none" };
     }
-    // Synchronous, so admission follows frame order.
-    if (!ctx.admitted.has(location)) {
-      if (ctx.admitted.size >= MAX_CANDIDATES) {
-        return { kind: "error", reason: "too_many_candidates", frame };
-      }
-      ctx.admitted.add(location);
-    }
-    const candidate = await memo(ctx.candidates, location, async () => classify(location, ctx));
-    if (candidate === null) {
+    const admission = await admit(location, ctx);
+    if (admission.kind === "ineligible") {
       return { kind: "none" };
     }
+    if (admission.kind === "capped") {
+      return { kind: "error", reason: "too_many_candidates", frame };
+    }
+    const { candidate } = admission;
     const { result, traceMap } = await memo(ctx.loads, candidate.key, async () =>
       load(candidate, ctx),
     );
@@ -370,9 +416,11 @@ function createSourceMapResolver(options: SourceMapResolverOptions): SourceMapRe
       deadline: AbortSignal.timeout(options.budgetMs),
       realRoots,
       rootsKey: JSON.stringify(realRoots.toSorted()),
-      admitted: new Set(),
+      admissions: new Map(),
+      admissionTail: Promise.resolve(),
+      rootChecks: 0,
+      slots: 0,
       limit: createLimiter(MAX_CONCURRENT_LOADS),
-      candidates: new Map(),
       loads: new Map(),
       sources: new Map(),
     };

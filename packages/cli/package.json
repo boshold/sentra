@@ -35,6 +35,7 @@
   },
   "dependencies": {
     "@bosdev/sentra-core": "workspace:*",
+    "@modelcontextprotocol/server": "^2.2.0",
     "cleye": "^2.7.0",
     "zod": "^4.4.3"
   },

@@ -68,6 +68,9 @@ importers:
       '@bosdev/sentra-core':
         specifier: workspace:*
         version: link:../core
+      '@modelcontextprotocol/server':
+        specifier: ^2.2.0
+        version: 2.2.0
       cleye:
         specifier: ^2.7.0
         version: 2.7.0

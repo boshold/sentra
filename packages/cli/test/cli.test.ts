@@ -210,8 +210,6 @@ describe("runCli flag validation", () => {
       throw new Error("port in use");
     });
     expect(result).toMatchObject({ code: 1, stderr: "sentra: port in use\n" });
-    const unimplemented = await run(["--port", "0"]);
-    expect(unimplemented.code).toBe(1);
   });
 });
 

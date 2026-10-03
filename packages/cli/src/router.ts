@@ -1,0 +1,130 @@
+import type { IncomingMessage, ServerResponse } from "node:http";
+
+import type { SentraLogger } from "@bosdev/sentra-core";
+
+import type { Guard } from "#src/guard.js";
+
+/** May return a promise; rejections become `500 internal_error`. */
+type NodeListener = (req: IncomingMessage, res: ServerResponse) => void | Promise<void>;
+
+interface Routes {
+  /** `toNodeListener(sentra.handle)`. */
+  ingest: NodeListener;
+  /** `null` when `--no-api`. */
+  api: NodeListener | null;
+  /** `GET /api/sentra/stream` (SSE); `null` when `--no-api`. */
+  stream: NodeListener | null;
+  /** `null` when `--no-mcp`. */
+  mcp: NodeListener | null;
+}
+
+const API_PREFIX = "/api/sentra";
+const JSON_TYPE = "application/json; charset=utf-8";
+
+function sendJson(
+  res: ServerResponse,
+  status: number,
+  body: unknown,
+  headers: Record<string, string> = {},
+): void {
+  const text = JSON.stringify(body);
+  res.writeHead(status, {
+    "content-type": JSON_TYPE,
+    "content-length": String(Buffer.byteLength(text)),
+    ...headers,
+  });
+  res.end(text);
+}
+
+function sendError(
+  res: ServerResponse,
+  status: number,
+  code: string,
+  message: string,
+  details?: unknown,
+): void {
+  sendJson(res, status, {
+    error: details === undefined ? { code, message } : { code, message, details },
+  });
+}
+
+function sendJsonRpcError(res: ServerResponse, status: number, message: string): void {
+  sendJson(res, status, { jsonrpc: "2.0", error: { code: -32_000, message }, id: null });
+}
+
+type Target =
+  | { kind: "ingest" }
+  | { kind: "mcp"; handler: NodeListener | null }
+  | { kind: "api"; handler: NodeListener | null };
+
+function selectTarget(routes: Routes, pathname: string): Target {
+  if (pathname === "/mcp") {
+    return { kind: "mcp", handler: routes.mcp };
+  }
+  if (pathname === API_PREFIX || pathname.startsWith(`${API_PREFIX}/`)) {
+    return {
+      kind: "api",
+      handler: pathname === `${API_PREFIX}/stream` ? routes.stream : routes.api,
+    };
+  }
+  return { kind: "ingest" };
+}
+
+function headerValue(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value.join(",") : value;
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function createRouter(
+  routes: Routes,
+  guard: Guard,
+  options: { logger?: SentraLogger } = {},
+): (req: IncomingMessage, res: ServerResponse) => void {
+  const { logger } = options;
+
+  function fail(res: ServerResponse, error: unknown): void {
+    logger?.error(`request handler failed: ${messageOf(error)}`, { error });
+    if (res.headersSent) {
+      res.destroy();
+      return;
+    }
+    sendError(res, 500, "internal_error", "internal error");
+  }
+
+  async function dispatch(
+    handler: NodeListener,
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
+    try {
+      await handler(req, res);
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+
+  return function router(req, res) {
+    const pathname = URL.parse(req.url ?? "/", "http://x")?.pathname ?? "/";
+    const target = selectTarget(routes, pathname);
+    if (target.kind === "ingest") {
+      void dispatch(routes.ingest, req, res);
+      return;
+    }
+    const verdict = guard({ host: req.headers.host, origin: headerValue(req.headers.origin) });
+    if (!verdict.ok) {
+      if (target.kind === "mcp") {
+        sendJsonRpcError(res, 403, verdict.message);
+      } else {
+        sendError(res, 403, verdict.code, verdict.message);
+      }
+      return;
+    }
+    void dispatch(target.handler ?? routes.ingest, req, res);
+  };
+}
+
+export { createRouter, sendError, sendJson };
+export type { NodeListener, Routes };

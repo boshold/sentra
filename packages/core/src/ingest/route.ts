@@ -54,8 +54,9 @@ export function parseIngestPath(
   if (match === null || projectId === undefined) {
     return null;
   }
-  const prefix = pathname.slice(0, match.index).replace(/^\//, "");
-  const segments = prefix === "" ? [] : prefix.split("/");
+  // Keep empty segments (`//api/...`) so they fail validation instead of vanishing.
+  const prefix = pathname.slice(0, match.index);
+  const segments = prefix === "" ? [] : prefix.replace(/^\//, "").split("/");
   return {
     scope: scopeFromSegments(segments),
     projectId,

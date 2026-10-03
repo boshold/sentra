@@ -176,6 +176,20 @@ describe("createIngestHandler", () => {
       sinkCalled: false,
     },
     {
+      name: "empty leading segment",
+      request: () => post(`${BASE}//api/1/envelope/`, ENVELOPE),
+      status: 400,
+      code: "invalid_scope",
+      sinkCalled: false,
+    },
+    {
+      name: "two empty leading segments",
+      request: () => post(`${BASE}///api/1/envelope/`, ENVELOPE),
+      status: 400,
+      code: "invalid_scope",
+      sinkCalled: false,
+    },
+    {
       name: "empty body",
       request: () => post(SCOPED, ""),
       status: 400,

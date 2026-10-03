@@ -33,6 +33,8 @@ const invalidScopePaths = [
   "/my%20app/api/1/envelope/",
   "/a//b/api/1/envelope/",
   "/a b/api/1/envelope/",
+  "//api/1/envelope/",
+  "///api/1/envelope/",
 ];
 
 describe("parseIngestPath", () => {

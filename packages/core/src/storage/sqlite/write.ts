@@ -1,5 +1,6 @@
 import { int, object } from "zod";
 
+import { isKeptEnvelope } from "#src/storage/match.js";
 import type { Connection } from "#src/storage/sqlite/connection.js";
 import {
   ENVELOPE_COLUMNS,
@@ -26,8 +27,10 @@ export function writeBatch(
     receivedAt,
     batch.items.length,
   );
-  const envelopeRow = envelopeToRow(envelope);
-  statements.insertEnvelope.run(...ENVELOPE_COLUMNS.map((column) => envelopeRow[column]));
+  if (isKeptEnvelope(batch)) {
+    const envelopeRow = envelopeToRow(envelope);
+    statements.insertEnvelope.run(...ENVELOPE_COLUMNS.map((column) => envelopeRow[column]));
+  }
   for (const { item, blob } of batch.items) {
     const itemRow = itemToRow(item);
     statements.insertItem.run(...ITEM_COLUMNS.map((column) => itemRow[column]));

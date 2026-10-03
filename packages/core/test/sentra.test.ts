@@ -1,7 +1,7 @@
 import { gunzipSync } from "node:zlib";
 
 import { SentraConfigError, SentraValidationError } from "#src/errors.js";
-import { createSentra } from "#src/index.js";
+import { createSentra, memoryStorage } from "#src/index.js";
 import type { Sentra } from "#src/index.js";
 import type { ItemKind, LiveEvent, SentraLogger } from "#src/types.js";
 
@@ -227,6 +227,23 @@ describe("createSentra end to end", () => {
     const [other] = page.items;
     expect(await withoutRaw.query.getRawEnvelope(other?.envelopeId ?? "")).toBeNull();
     expect(await withoutRaw.query.getRawEnvelope("missing")).toBeNull();
+  });
+
+  it("does not keep successful envelopes without items", async () => {
+    const instance = await sentra({ storage: memoryStorage({ maxItems: 1 }) });
+    const ids: string[] = [];
+    for (let index = 0; index < 10; index += 1) {
+      const response = await instance.handle(envelopeRequest(`{"sdk":{"name":"x${index}"}}\n`));
+      expect(response.status).toBe(200);
+      const body: unknown = await response.json();
+      ids.push(typeof body === "object" && body !== null && "id" in body ? String(body.id) : "");
+    }
+    expect(new Set(ids).size).toBe(10);
+    for (const id of ids) {
+      expect(await instance.query.getRawEnvelope(id)).toBeNull();
+    }
+    const page = await instance.query.listItems();
+    expect(page.items).toEqual([]);
   });
 
   it("stores invalid envelopes as failed and answers 400", async () => {

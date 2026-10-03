@@ -1,5 +1,6 @@
 import { levelRank } from "#src/normalize/level.js";
 import type {
+  IngestBatch,
   ResolvedIssueFilter,
   ResolvedItemFilter,
   ResolvedScopeTimeFilter,
@@ -101,4 +102,15 @@ function matchesEnvelopeFilter(
   return matchesScope(envelope.scope, filter) && matchesTime(filter, envelope.receivedAt);
 }
 
-export { matchesEnvelopeFilter, matchesIssueFilter, matchesItemFilter, matchesScope };
+/** A successful envelope without items references nothing, so it is not stored. */
+function isKeptEnvelope(batch: IngestBatch): boolean {
+  return batch.envelope.parseError !== null || batch.items.length > 0;
+}
+
+export {
+  isKeptEnvelope,
+  matchesEnvelopeFilter,
+  matchesIssueFilter,
+  matchesItemFilter,
+  matchesScope,
+};

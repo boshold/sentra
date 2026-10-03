@@ -3,6 +3,7 @@ import { SentraConfigError } from "#src/errors.js";
 import { issueMetadataOf } from "#src/grouping/metadata.js";
 import { encodeCursor, encodeIssueCursor, parseIssueCursor } from "#src/query/cursor.js";
 import {
+  isKeptEnvelope,
   matchesEnvelopeFilter,
   matchesIssueFilter,
   matchesItemFilter,
@@ -400,11 +401,13 @@ class MemoryStorage implements StorageAdapter {
 
   #storeEnvelope(batch: IngestBatch): void {
     const { envelope } = batch;
-    const copy = withoutBody(envelope);
-    this.#envelopes.set(
-      envelope.id,
-      envelope.body === undefined ? copy : { ...copy, body: new Uint8Array(envelope.body) },
-    );
+    if (isKeptEnvelope(batch)) {
+      const copy = withoutBody(envelope);
+      this.#envelopes.set(
+        envelope.id,
+        envelope.body === undefined ? copy : { ...copy, body: new Uint8Array(envelope.body) },
+      );
+    }
     this.#touchScope(envelope.scope, envelope.receivedAt, 0);
     for (const { item, blob } of batch.items) {
       const stored = structuredClone(item);

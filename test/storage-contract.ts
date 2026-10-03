@@ -342,6 +342,21 @@ function runStorageContract(
         });
       });
 
+      it("does not store a successful envelope without items but touches its scope", async () => {
+        const empty = await write(adapter, {
+          receivedAt: iso(T0 + HOUR),
+          scope: { service: "empty" },
+          body: new Uint8Array([1, 2, 3]),
+        });
+        expect(await adapter.getEnvelope(empty.envelope.id)).toBeNull();
+        expect(await adapter.listFailedEnvelopes({}, ALL)).toMatchObject({ items: [] });
+        expect(await adapter.listScopes({ service: "empty" })).toMatchObject([
+          { service: "empty", itemCount: 0, lastSeenAt: iso(T0 + HOUR) },
+        ]);
+        const failed = await write(adapter, { parseError: "bad header" });
+        expect(await adapter.getEnvelope(failed.envelope.id)).not.toBeNull();
+      });
+
       it("round trips binary and empty blobs", async () => {
         const binary = new Uint8Array([0, 10, 255, 13, 10]);
         const { items } = await write(adapter, {

@@ -1,0 +1,17 @@
+{
+  "name": "node-gzip",
+  "scenario": "node-gzip",
+  "sdk": {
+    "name": "sentry.javascript.node",
+    "version": "11.1.0"
+  },
+  "method": "POST",
+  "path": "/my-app/3f9a1c/web/api/1/envelope/?sentry_version=7&sentry_key=sentra&sentry_client=sentry.javascript.node%2F11.1.0",
+  "headers": {
+    "content-encoding": "gzip"
+  },
+  "bodyBytes": 1962,
+  "itemTypes": [
+    "event"
+  ]
+}

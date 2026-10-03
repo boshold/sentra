@@ -1,0 +1,21 @@
+[
+  "browser-attachment",
+  "browser-error",
+  "browser-logs-spans-1",
+  "browser-logs-spans-2",
+  "node-attachment",
+  "node-client-report-1",
+  "node-client-report-2",
+  "node-empty-attachment",
+  "node-error",
+  "node-gzip",
+  "node-library-frame",
+  "node-logs",
+  "node-message",
+  "node-session-1",
+  "node-session-2",
+  "node-spans",
+  "node-transaction",
+  "node-tunnel",
+  "node-unscoped"
+]

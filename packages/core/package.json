@@ -1,0 +1,58 @@
+{
+  "name": "@bosdev/sentra-core",
+  "version": "0.1.0",
+  "description": "Local Sentry-compatible event receiver: ingest handler, parser, issues, source maps, storage, query and live subscribe.",
+  "homepage": "https://github.com/boshold/sentra#readme",
+  "bugs": {
+    "url": "https://github.com/boshold/sentra/issues"
+  },
+  "license": "MIT",
+  "author": "Kevin Boshold",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/boshold/sentra.git",
+    "directory": "packages/core"
+  },
+  "files": [
+    "dist/**/*.mjs",
+    "dist/**/*.d.ts",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "type": "module",
+  "imports": {
+    "#src/*": "./src/*"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@jridgewell/trace-mapping": "^0.3.31",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@jridgewell/sourcemap-codec": "^1.6.0",
+    "@modelcontextprotocol/client": "^2.2.0",
+    "@modelcontextprotocol/sdk": "^1.31.0",
+    "@modelcontextprotocol/server": "^2.2.0",
+    "@sentry/core": "^11.1.0",
+    "@types/better-sqlite3": "^9.6.0"
+  },
+  "optionalDependencies": {
+    "better-sqlite3": "^13.0.3"
+  },
+  "engines": {
+    "node": ">=22.15"
+  }
+}

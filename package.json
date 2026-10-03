@@ -1,0 +1,47 @@
+{
+  "name": "sentra",
+  "private": true,
+  "license": "MIT",
+  "author": "Kevin Boshold",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/boshold/sentra.git"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "tsx scripts/build.ts",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:integration": "vitest run -c test/integration/vitest.config.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json && pnpm -r typecheck",
+    "lint": "oxfmt --check && oxlint --type-aware --deny-warnings",
+    "lint:fix": "oxfmt --write && oxlint --type-aware --fix --deny-warnings",
+    "check": "pnpm typecheck && pnpm lint && pnpm build && pnpm test:coverage",
+    "capture:fixtures": "tsx scripts/capture-fixtures.ts",
+    "smoke:bun": "tsx scripts/bun-compile-smoke.ts"
+  },
+  "devDependencies": {
+    "@bosdev/sentra-core": "workspace:*",
+    "@happy-dom/global-registrator": "^20.14.5",
+    "@sentry/browser": "^11.1.0",
+    "@sentry/node": "^11.1.0",
+    "@types/node": "^26.2.0",
+    "@vitejs/plugin-vue": "^6.0.9",
+    "@vitest/coverage-v8": "^4.1.11",
+    "esbuild": "^0.28.2",
+    "happy-dom": "^20.14.5",
+    "oxfmt": "^0.64.0",
+    "oxlint": "^1.79.0",
+    "oxlint-tsgolint": "^7.0.2001",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1",
+    "vitest": "^4.1.11",
+    "vue": "^3.5.43",
+    "zod": "^4.4.3"
+  },
+  "engines": {
+    "node": ">=22.15"
+  },
+  "packageManager": "pnpm@10.34.3+sha512.f2c531b08829d7be7f03c90addc266615f9c5477463e4bf1d275cb263ce9ea57cf0d5599110d94649a9bb3fed9f0b5efcea74a7016b61532a24cb9ad87860c1d"
+}

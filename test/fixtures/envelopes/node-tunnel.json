@@ -1,0 +1,15 @@
+{
+  "name": "node-tunnel",
+  "scenario": "node-tunnel",
+  "sdk": {
+    "name": "sentry.javascript.node",
+    "version": "11.1.0"
+  },
+  "method": "POST",
+  "path": "/api/1/envelope/",
+  "headers": {},
+  "bodyBytes": 4582,
+  "itemTypes": [
+    "event"
+  ]
+}

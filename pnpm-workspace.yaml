@@ -1,0 +1,25 @@
+packages:
+  - "packages/*"
+
+# Supply-chain hardening — settings reference: https://pnpm.io/settings
+
+# Refuse versions published <3 days ago (direct + transitive); fails the install
+# when a range has no old-enough version. Malicious npm releases are typically
+# detected and yanked within hours.
+# On upgrade to pnpm 11: add minimumReleaseAgeStrict: true (v11-only setting).
+minimumReleaseAge: 4320 # minutes (3 days)
+
+# Fail install if a package's provenance/trusted-publisher evidence weakens
+# vs an earlier release (stolen-token republish pattern).
+trustPolicy: no-downgrade
+trustPolicyIgnoreAfter: 4320 # only check versions published in the last 3 days (pre-provenance packages would false-positive)
+
+# Transitive deps must come from registries — no git/tarball sources smuggled in by subdeps.
+blockExoticSubdeps: true
+
+# Build-script allowlist — any package not listed that tries to run install scripts is a hard error.
+allowBuilds:
+  esbuild: true # downloads platform binary
+
+# Verify node_modules matches the lockfile before pnpm run/exec; auto-install on mismatch.
+verifyDepsBeforeRun: install

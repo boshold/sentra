@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "paths": {
+      "@bosdev/sentra-core": ["./packages/core/src/index.ts"]
+    }
+  },
+  "include": ["scripts", "test", "vitest.config.ts"],
+  "exclude": ["test/fixtures/sourcemaps"]
+}

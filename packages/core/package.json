@@ -37,6 +37,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@jridgewell/trace-mapping": "^0.3.31",
     "@sentry/core": "^11.1.0",
     "zod": "^4.4.3"
   },

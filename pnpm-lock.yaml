@@ -62,6 +62,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@jridgewell/trace-mapping':
+        specifier: ^0.3.31
+        version: 0.3.31
       '@sentry/core':
         specifier: ^11.1.0
         version: 11.1.0

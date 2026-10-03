@@ -72,7 +72,12 @@ function renderBanner(input: BannerInput): string[] {
     ...(input.api ? [line("query API", `${listenUrl}/api/sentra`)] : []),
     ...(input.mcp ? [line("MCP", `${listenUrl}/mcp`)] : []),
     ...(wildcard
-      ? [line("warning", "ingest, query API and MCP are reachable from the network")]
+      ? [
+          line(
+            "warning",
+            "ingest is reachable from the network; query API/MCP need --allowed-host <ip>",
+          ),
+        ]
       : []),
   ];
   return lines;

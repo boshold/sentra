@@ -51,7 +51,7 @@ describe("renderBanner", () => {
     const lines = renderBanner({ ...SQLITE, host: "0.0.0.0" });
     expect(lines).toContain("DSN           http://sentra@192.168.1.10:8969/1");
     expect(lines.at(-1)).toBe(
-      "warning       ingest, query API and MCP are reachable from the network",
+      "warning       ingest is reachable from the network; query API/MCP need --allowed-host <ip>",
     );
     expect(lines[0]).toBe("sentra 0.1.0  listening on http://0.0.0.0:8969");
     expect(renderBanner({ ...SQLITE, host: "::" })[0]).toBe(

@@ -144,8 +144,9 @@ function subscribeLive(
   sentra: Sentra,
 ): () => void {
   const passes = createLiveFilter(config);
-  return sentra.subscribe({}, (event) => {
-    if (!passes(event)) {
+  let active = true;
+  const unsubscribe = sentra.subscribe({}, (event) => {
+    if (!active || !passes(event)) {
       return;
     }
     const lines =
@@ -154,6 +155,16 @@ function subscribeLive(
         : formatLiveEvent(event, { color: config.color, stream: stdout });
     stdout.write(`${lines.join("\n")}\n`);
   });
+  function stop(): void {
+    if (active) {
+      active = false;
+      stdout.off("error", stop);
+      unsubscribe();
+    }
+  }
+  // A closed pipe (EPIPE, e.g. `| head -1`) ends live output; the server keeps running.
+  stdout.on("error", stop);
+  return stop;
 }
 
 async function startServer(

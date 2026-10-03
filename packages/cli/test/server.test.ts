@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { connect, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { PassThrough } from "node:stream";
+import { PassThrough, Writable } from "node:stream";
 
 import { resolveStartConfig, runCli } from "#src/cli.js";
 import type { StartConfig } from "#src/cli.js";
@@ -225,6 +225,25 @@ describe("live output wiring", () => {
       expect.objectContaining({ item: expect.objectContaining({ kind: "log" }) }),
       expect.objectContaining({ item: expect.objectContaining({ kind: "log" }) }),
     ]);
+  });
+
+  it("ends live output quietly when stdout fails with EPIPE", async () => {
+    let writes = 0;
+    const stdout = new Writable({
+      write(_chunk, _encoding, done) {
+        writes += 1;
+        done(Object.assign(new Error("write EPIPE"), { code: "EPIPE" }));
+      },
+    });
+    const io = { stdout, stderr: new PassThrough() };
+    const server = await startServer(memoryConfig({ format: "json", quiet: false }), io);
+    running.push(server);
+    await postFixture(server, "node-error");
+    await vi.waitFor(() => {
+      expect(stdout.destroyed).toBe(true);
+    });
+    await postFixture(server, "node-error");
+    expect(writes).toBe(1);
   });
 
   it("stops live output after close", async () => {

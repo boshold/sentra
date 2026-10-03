@@ -17,8 +17,8 @@ import {
 
 const plain = { color: false };
 
-beforeAll(() => {
-  process.env.TZ = "UTC";
+beforeEach(() => {
+  vi.stubEnv("TZ", "UTC");
 });
 
 afterEach(() => {

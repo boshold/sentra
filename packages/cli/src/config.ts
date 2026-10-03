@@ -245,11 +245,16 @@ function resolveStartConfig(flags: unknown, env: NodeJS.ProcessEnv, cwd: string)
   };
 }
 
-/** Non-internal IPv4 addresses of this machine. */
+/** Link-local addresses (`169.254.0.0/16`, `fe80::/10`) are not reachable as LAN hosts. */
+function isLinkLocal(address: string): boolean {
+  return address.startsWith("169.254.") || /^fe[89ab][0-9a-f]:/i.test(address);
+}
+
+/** Non-internal, non-link-local IPv4 addresses of this machine. */
 function lanAddresses(): string[] {
   return Object.values(networkInterfaces()).flatMap((entries) =>
     (entries ?? [])
-      .filter((entry) => entry.family === "IPv4" && !entry.internal)
+      .filter((entry) => entry.family === "IPv4" && !entry.internal && !isLinkLocal(entry.address))
       .map((entry) => entry.address),
   );
 }

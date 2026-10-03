@@ -2,8 +2,8 @@ import { createServer } from "node:http";
 import type { Server } from "node:http";
 import { PassThrough } from "node:stream";
 
-import { createSentra, memoryStorage } from "@bosdev/sentra-core";
-import type { Sentra } from "@bosdev/sentra-core";
+import { createSentra, memoryStorage } from "@boshold/sentra-core";
+import type { Sentra } from "@boshold/sentra-core";
 
 import { createApiHandler } from "#src/api.js";
 import { resolveStartConfig } from "#src/config.js";

@@ -1,12 +1,12 @@
 # Changelog
 
-All notable changes to `@bosdev/sentra-core` and `@bosdev/sentra-cli`. Both packages share one version number.
+All notable changes to `@boshold/sentra-core` and `@boshold/sentra-cli`. Both packages share one version number.
 
 ## 0.1.0 - 2026-10-03
 
 First release.
 
-### `@bosdev/sentra-core`
+### `@boshold/sentra-core`
 
 - Ingest handler for the Sentry envelope protocol (`POST /[project/][session/][service/]api/:projectId/envelope/`, `OPTIONS` with open CORS), with gzip, deflate, brotli and zstd decoding, size limits and `toNodeListener` for `node:http`.
 - Scope from the DSN path (`project/session/service`, `default` for missing segments, `_` to skip one) or from the envelope header DSN when the SDK uses `tunnel`.
@@ -21,7 +21,7 @@ First release.
 - Five read-only MCP tool definitions (`sentra_list_scopes`, `sentra_list_issues`, `sentra_get_issue`, `sentra_list_items`, `sentra_get_item`) for MCP SDK v1 and v2 hosts.
 - Plain-text renderers for issues, records and stack frames.
 
-### `@bosdev/sentra-cli`
+### `@boshold/sentra-cli`
 
 - `sentra` / `sentra start`: HTTP server on `127.0.0.1:8969` with a startup banner, SQLite storage under `$XDG_DATA_HOME/sentra/sentra.db` or memory storage. Printed DSNs use `http://127.0.0.1:<port>` unless `--public-url` is set.
 - Live terminal output (pretty or NDJSON) with kind, level and scope filters.

@@ -1,23 +1,32 @@
-# @bosdev/sentra-cli
+# @boshold/sentra-cli
 
 Local server for Sentry SDK events. Point any official Sentry SDK at it with a different DSN; Sentra stores the events in SQLite (or memory), prints errors, messages and logs in the terminal, and serves them over an HTTP query API, a server-sent events stream and an MCP endpoint.
 
-Built on [`@bosdev/sentra-core`](https://github.com/boshold/sentra/tree/main/packages/core).
+Built on [`@boshold/sentra-core`](https://github.com/boshold/sentra/tree/main/packages/core).
 
 ## Install / run
 
+The packages are published to GitHub Packages, not npmjs. Point the `@boshold` scope at it once, with a GitHub token that has `read:packages`, in `~/.npmrc` or the project's `.npmrc`:
+
+```ini
+@boshold:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+```
+
+Then:
+
 ```bash
-pnpx @bosdev/sentra-cli
+pnpx @boshold/sentra-cli
 # or
-npx @bosdev/sentra-cli
+npx @boshold/sentra-cli
 ```
 
 Global install (binary `sentra`):
 
 ```bash
-pnpm add -g @bosdev/sentra-cli
+pnpm add -g @boshold/sentra-cli
 # or
-npm install -g @bosdev/sentra-cli
+npm install -g @boshold/sentra-cli
 
 sentra
 ```

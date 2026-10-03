@@ -1,8 +1,8 @@
 import { createServer } from "node:http";
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from "node:http";
 
-import { createSentra, memoryStorage, toNodeListener } from "@bosdev/sentra-core";
-import type { Sentra, SentraOptions } from "@bosdev/sentra-core";
+import { createSentra, memoryStorage, toNodeListener } from "@boshold/sentra-core";
+import type { Sentra, SentraOptions } from "@boshold/sentra-core";
 
 interface RecordedRequest {
   method: string;

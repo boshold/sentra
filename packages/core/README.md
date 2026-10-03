@@ -1,4 +1,4 @@
-# @bosdev/sentra-core
+# @boshold/sentra-core
 
 Embeddable receiver for Sentry SDK envelopes. It exports a fetch-style ingest handler, parses envelopes into typed records, groups errors into issues, maps stack frames through source maps, stores everything in memory or SQLite, and offers a query API, live subscriptions and MCP tool definitions. The host process owns the HTTP server; the core never listens on a port.
 
@@ -10,14 +10,23 @@ http://sentra@<host>:<port>/[project/][session/][service/]1
 
 A missing segment becomes `default`, `_` skips a middle segment, segments match `[A-Za-z0-9._-]{1,64}` and must not be `.` or `..`. The public key and project id are ignored.
 
-For a ready-made server with terminal output, HTTP API and MCP endpoint, use [`@bosdev/sentra-cli`](https://github.com/boshold/sentra/tree/main/packages/cli).
+For a ready-made server with terminal output, HTTP API and MCP endpoint, use [`@boshold/sentra-cli`](https://github.com/boshold/sentra/tree/main/packages/cli).
 
 ## Install
 
+The packages are published to GitHub Packages, not npmjs. Point the `@boshold` scope at it once, with a GitHub token that has `read:packages`, in `~/.npmrc` or the project's `.npmrc`:
+
+```ini
+@boshold:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+```
+
+Then:
+
 ```bash
-pnpm add @bosdev/sentra-core
+pnpm add @boshold/sentra-core
 # or
-npm install @bosdev/sentra-core
+npm install @boshold/sentra-core
 ```
 
 `better-sqlite3`, the preferred SQLite driver, is an optional dependency and is installed with the package. If it cannot be installed or loaded on a platform, Sentra uses `node:sqlite`.
@@ -28,7 +37,7 @@ Requires Node `>=22.15` or Bun `>=1.4`.
 
 ```ts
 import { createServer } from "node:http";
-import { createSentra, sqliteStorage, toNodeListener } from "@bosdev/sentra-core";
+import { createSentra, sqliteStorage, toNodeListener } from "@boshold/sentra-core";
 import { McpServer } from "@modelcontextprotocol/server";
 
 const sentra = await createSentra({
@@ -112,7 +121,7 @@ On Bun, `auto` uses only `node:sqlite` (built into Bun `>=1.4`) and never loads 
 ## DSN helpers
 
 ```ts
-import { buildDsn, isIngestPath, parseDsnScope } from "@bosdev/sentra-core";
+import { buildDsn, isIngestPath, parseDsnScope } from "@boshold/sentra-core";
 
 buildDsn({ baseUrl: "http://127.0.0.1:8969", project: "my-app", service: "web" });
 // "http://sentra@127.0.0.1:8969/my-app/_/web/1"

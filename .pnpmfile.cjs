@@ -1,5 +1,5 @@
 // Dev-only manifest fields; `src/` is not shipped, so `imports` would point nowhere.
-const PACKED = new Set(["@bosdev/sentra-core", "@bosdev/sentra-cli"]);
+const PACKED = new Set(["@boshold/sentra-core", "@boshold/sentra-cli"]);
 
 function beforePacking(pkg) {
   if (!PACKED.has(pkg.name)) {

@@ -31,12 +31,8 @@ const TARGETS: Target[] = [
   },
 ];
 
-/** Version for `sentra --version`: CI tag (SENTRA_VERSION) → core package.json → "dev". */
+/** Version for `sentra --version`: core package.json → "dev". */
 function resolveVersion(): string {
-  const envVersion = process.env.SENTRA_VERSION;
-  if (envVersion) {
-    return envVersion;
-  }
   const parsed: unknown = JSON.parse(
     readFileSync(path.join(ROOT, "packages/core/package.json"), "utf8"),
   );
@@ -97,7 +93,7 @@ for (const target of TARGETS) {
     format: "esm",
     packages: "external",
     // Tsconfig `paths` map workspace packages to sources; keep them external like other packages.
-    external: ["@bosdev/*"],
+    external: ["@boshold/*"],
     banner: target.banner ? { js: target.banner } : undefined,
     define: { __VERSION__: JSON.stringify(version) },
   });

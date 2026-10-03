@@ -6,17 +6,26 @@ Not included: the Sentry `/store/` endpoint, reprocessing, forwarding to Spotlig
 
 ## Packages
 
-| Package               | Role                                                                                                                         | Docs                                     |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| `@bosdev/sentra-core` | Library: ingest handler, parser, issues, source maps, memory/SQLite storage, query API, live subscribe, MCP tool definitions | [packages/core](packages/core/README.md) |
-| `@bosdev/sentra-cli`  | Standalone server `sentra`: HTTP server, startup banner, live terminal output, HTTP query API, SSE stream, MCP endpoint      | [packages/cli](packages/cli/README.md)   |
+| Package                | Role                                                                                                                         | Docs                                     |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `@boshold/sentra-core` | Library: ingest handler, parser, issues, source maps, memory/SQLite storage, query API, live subscribe, MCP tool definitions | [packages/core](packages/core/README.md) |
+| `@boshold/sentra-cli`  | Standalone server `sentra`: HTTP server, startup banner, live terminal output, HTTP query API, SSE stream, MCP endpoint      | [packages/cli](packages/cli/README.md)   |
 
 ## Quick start (CLI)
 
+The packages are published to GitHub Packages, not npmjs. Point the `@boshold` scope at it once, with a GitHub token that has `read:packages`, in `~/.npmrc` or the project's `.npmrc`:
+
+```ini
+@boshold:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+```
+
+Then run the CLI:
+
 ```bash
-pnpx @bosdev/sentra-cli
+pnpx @boshold/sentra-cli
 # or
-npx @bosdev/sentra-cli
+npx @boshold/sentra-cli
 ```
 
 Startup banner:
@@ -115,7 +124,7 @@ The core never listens on a port itself. The host owns the HTTP server and passe
 
 ```ts
 import { createServer } from "node:http";
-import { createSentra, sqliteStorage, toNodeListener } from "@bosdev/sentra-core";
+import { createSentra, sqliteStorage, toNodeListener } from "@boshold/sentra-core";
 import { McpServer } from "@modelcontextprotocol/server";
 
 const sentra = await createSentra({
@@ -242,6 +251,10 @@ pnpm check              # typecheck, lint, build, unit tests with coverage
 pnpm test               # unit tests
 pnpm test:integration   # real Sentry SDKs, Vite and Nitro against Sentra (run pnpm build first)
 ```
+
+## Releasing
+
+Run the Release workflow (Actions → Release) with a `bump` (`patch`, `minor`, `major`). It runs the full CI, writes the next version into both packages, tags `vX.Y.Z`, publishes both packages to GitHub Packages and creates the GitHub release. It uses the shared flow from [boshold/gh-actions](https://github.com/boshold/gh-actions#releasing). Do not push tags or edit versions by hand; `dry-run` tests the release without publishing.
 
 ## License
 

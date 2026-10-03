@@ -1,6 +1,6 @@
 {
-  "name": "@bosdev/sentra-cli",
-  "version": "0.1.0",
+  "name": "@boshold/sentra-cli",
+  "version": "0.0.0",
   "description": "Standalone local Sentry-compatible event receiver with live terminal output, HTTP query API and MCP endpoint.",
   "homepage": "https://github.com/boshold/sentra#readme",
   "bugs": {
@@ -28,14 +28,14 @@
     "#src/*": "./src/*"
   },
   "publishConfig": {
-    "access": "public"
+    "registry": "https://npm.pkg.github.com"
   },
   "scripts": {
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@bosdev/sentra-core": "workspace:^",
+    "@boshold/sentra-core": "workspace:^",
     "@modelcontextprotocol/server": "^2.2.0",
     "cleye": "^2.7.0",
     "zod": "^4.4.3"

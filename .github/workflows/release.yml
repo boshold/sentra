@@ -1,109 +1,45 @@
 name: Release
 
+# Shared release flow, see https://github.com/boshold/gh-actions#releasing
+
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Tag to release (e.g. v0.1.0)"
-        required: true
-
-permissions: {}
+      bump:
+        description: Version part to raise
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      dry-run:
+        description: Test and build, but push, publish and release nothing
+        type: boolean
+        default: false
 
 concurrency:
-  group: release-${{ inputs.tag || github.ref_name }}
+  group: release
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  packages: read
+
 jobs:
-  npm:
-    name: Publish to npm
-    runs-on: ubuntu-latest
+  ci:
+    uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
-      id-token: write
-    env:
-      TAG: ${{ inputs.tag || github.ref_name }}
-    steps:
-      # Always the tag ref: a workflow_dispatch re-run builds the tagged commit, and a branch named like a tag never publishes.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: refs/tags/${{ inputs.tag || github.ref_name }}
-      - name: Require a tag ref
-        run: |
-          if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" != "refs/tags/$TAG" ]; then
-            echo "::error::$GITHUB_REF is not refs/tags/$TAG"
-            exit 1
-          fi
-          git rev-parse --verify --quiet "refs/tags/$TAG^{commit}" >/dev/null || {
-            echo "::error::tag $TAG does not exist"
-            exit 1
-          }
-      - uses: pnpm/setup@5d160c5bc68a09337ad0d5654e237e03253b5879 # v1.0.0
-        with:
-          install: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 22
-          cache: pnpm
-      # OIDC trusted publishing needs npm >= 11.5.1; Node 22 ships npm 10.
-      - run: npm install -g npm@11
-      - run: pnpm install --frozen-lockfile
-      # Committed versions must equal the tag; no `npm version` here (it would trip the lockfile check).
-      - name: Check tag matches package versions
-        run: |
-          VERSION="${TAG#v}"
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          for dir in packages/core packages/cli; do
-            actual=$(node -p "require('./$dir/package.json').version")
-            if [ "$actual" != "$VERSION" ]; then
-              echo "::error::$dir has version $actual, tag $TAG expects $VERSION"
-              exit 1
-            fi
-          done
-      - run: pnpm typecheck && pnpm lint && pnpm build && pnpm test && pnpm test:integration
-      # Only pnpm rewrites workspace:^ to the real range, so npm publishes the pnpm-packed tarballs.
-      - name: Pack
-        run: |
-          mkdir -p "$GITHUB_WORKSPACE/artifacts"
-          pnpm --filter @bosdev/sentra-core pack --pack-destination "$GITHUB_WORKSPACE/artifacts"
-          pnpm --filter @bosdev/sentra-cli pack --pack-destination "$GITHUB_WORKSPACE/artifacts"
-          for tarball in artifacts/*.tgz; do
-            if tar -xOf "$tarball" package/package.json | grep -q "workspace:"; then
-              echo "::error::$tarball still contains a workspace: dependency"
-              exit 1
-            fi
-          done
-      # Auth via GitHub OIDC trusted publishing: NODE_AUTH_TOKEN="" so npm uses OIDC.
-      # Each package needs a Trusted Publisher on npm (repo boshold/sentra, workflow release.yml).
-      # Versions already on the registry are skipped, so a re-run after a partial failure completes.
-      # Core before CLI: the CLI depends on the published core version.
-      - name: Publish packages
-        env:
-          NODE_AUTH_TOKEN: ""
-        run: |
-          for pkg in core cli; do
-            name="@bosdev/sentra-$pkg"
-            if npm view "$name@$VERSION" version >/dev/null 2>&1; then
-              echo "$name@$VERSION already published, skipping"
-              continue
-            fi
-            npm publish "artifacts/bosdev-sentra-$pkg-$VERSION.tgz" --access public --provenance
-          done
+    with:
+      full: true
+    secrets: inherit
 
+  # Dependencies all come from npmjs, so publishing falls back to github.token.
   release:
-    name: Release
-    runs-on: ubuntu-latest
-    needs: npm
+    needs: ci
+    uses: boshold/gh-actions/.github/workflows/release-npm.yml@main
     permissions:
       contents: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: refs/tags/${{ inputs.tag || github.ref_name }}
-      - env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag || github.ref_name }}
-        run: |
-          gh release delete "$TAG" --yes --cleanup-tag=false 2>/dev/null || true
-          gh release create "$TAG" --verify-tag --generate-notes
+      packages: write
+    with:
+      bump: ${{ inputs.bump }}
+      dry-run: ${{ inputs.dry-run }}
+      node-version: "22"

@@ -1,8 +1,8 @@
 import { createServer } from "node:http";
 import type { Server } from "node:http";
 
-import { createSentra, memoryStorage } from "@bosdev/sentra-core";
-import type { Sentra } from "@bosdev/sentra-core";
+import { createSentra, memoryStorage } from "@boshold/sentra-core";
+import type { Sentra } from "@boshold/sentra-core";
 
 import { createMcpRoute } from "#src/mcp.js";
 import type { McpRoute } from "#src/mcp.js";

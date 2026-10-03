@@ -1,5 +1,5 @@
-import { createSentra, memoryStorage } from "@bosdev/sentra-core";
-import type { EventData, Frame, Item, ItemSummary, LiveEvent } from "@bosdev/sentra-core";
+import { createSentra, memoryStorage } from "@boshold/sentra-core";
+import type { EventData, Frame, Item, ItemSummary, LiveEvent } from "@boshold/sentra-core";
 
 import { fixtureToRequest, loadEnvelopeFixture } from "../../../../test/fixtures/envelopes.js";
 

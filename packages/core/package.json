@@ -1,6 +1,6 @@
 {
-  "name": "@bosdev/sentra-core",
-  "version": "0.1.0",
+  "name": "@boshold/sentra-core",
+  "version": "0.0.0",
   "description": "Local Sentry-compatible event receiver: ingest handler, parser, issues, source maps, storage, query and live subscribe.",
   "homepage": "https://github.com/boshold/sentra#readme",
   "bugs": {
@@ -31,7 +31,7 @@
     }
   },
   "publishConfig": {
-    "access": "public"
+    "registry": "https://npm.pkg.github.com"
   },
   "scripts": {
     "test": "vitest run",

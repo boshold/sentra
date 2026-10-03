@@ -1,3 +1,5 @@
+import { Buffer } from "node:buffer";
+
 import { SentraValidationError } from "#src/errors.js";
 
 const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/;

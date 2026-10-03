@@ -32,16 +32,16 @@ function expectCode(fn: () => unknown, code: string): SentraValidationError {
 
 describe("resolveItemFilter", () => {
   it("treats undefined as {}", () => {
-    expect(resolveItemFilter(undefined, NOW)).toEqual({});
-    expect(resolveItemFilter({}, NOW)).toEqual({});
+    expect(resolveItemFilter(undefined, NOW)).toStrictEqual({});
+    expect(resolveItemFilter({}, NOW)).toStrictEqual({});
   });
 
   it("resolves since to from", () => {
-    expect(resolveItemFilter({ since: "60m" }, NOW)).toEqual({ from: NOW - 3_600_000 });
+    expect(resolveItemFilter({ since: "60m" }, NOW)).toStrictEqual({ from: NOW - 3_600_000 });
   });
 
   it("resolves ISO and epoch dates", () => {
-    expect(resolveItemFilter({ from: "2026-10-03T10:00:00Z", to: 5 }, NOW)).toEqual({
+    expect(resolveItemFilter({ from: "2026-10-03T10:00:00Z", to: 5 }, NOW)).toStrictEqual({
       from: Date.parse("2026-10-03T10:00:00Z"),
       to: 5,
     });
@@ -67,7 +67,7 @@ describe("resolveItemFilter", () => {
         },
         NOW,
       ),
-    ).toEqual({
+    ).toStrictEqual({
       project: ["p"],
       session: ["s1", "s2"],
       kind: ["error"],
@@ -106,7 +106,7 @@ describe("resolveItemFilter", () => {
   ])("rejects %j with invalid_filter", (input) => {
     const error = expectCode(() => resolveItemFilter(input, NOW), "invalid_filter");
     expect(Array.isArray(error.details)).toBe(true);
-    expect(error.details).toEqual(
+    expect(error.details).toStrictEqual(
       expect.arrayContaining([expect.objectContaining({ code: expect.any(String) })]),
     );
   });
@@ -116,7 +116,7 @@ describe("resolveItemFilter", () => {
       () => resolveItemFilter({ from: 1, since: "1h" }, NOW),
       "invalid_filter",
     );
-    expect(error.details).toEqual([expect.objectContaining({ path: ["since"] })]);
+    expect(error.details).toStrictEqual([expect.objectContaining({ path: ["since"] })]);
   });
 
   it("exposes a schema accepting the public input", () => {
@@ -128,7 +128,7 @@ describe("resolveIssueFilter", () => {
   it("resolves fields", () => {
     expect(
       resolveIssueFilter({ kind: "message", service: "web", since: "1h", q: "Boom" }, NOW),
-    ).toEqual({
+    ).toStrictEqual({
       kind: ["message"],
       service: ["web"],
       q: "Boom",
@@ -143,7 +143,7 @@ describe("resolveIssueFilter", () => {
 
 describe("resolveLiveFilter", () => {
   it("resolves item fields", () => {
-    expect(resolveLiveFilter({ kind: "log", minLevel: "info" })).toEqual({
+    expect(resolveLiveFilter({ kind: "log", minLevel: "info" })).toStrictEqual({
       kind: ["log"],
       minLevel: "info",
     });
@@ -156,12 +156,12 @@ describe("resolveLiveFilter", () => {
 
 describe("resolveScopeFilter / resolveScopeTimeFilter", () => {
   it("resolves scope", () => {
-    expect(resolveScopeFilter({ project: "p", session: [] })).toEqual({ project: ["p"] });
+    expect(resolveScopeFilter({ project: "p", session: [] })).toStrictEqual({ project: ["p"] });
     expectCode(() => resolveScopeFilter({ since: "1h" }), "invalid_filter");
   });
 
   it("resolves scope and time", () => {
-    expect(resolveScopeTimeFilter({ service: "s", since: "1s" }, NOW)).toEqual({
+    expect(resolveScopeTimeFilter({ service: "s", since: "1s" }, NOW)).toStrictEqual({
       service: ["s"],
       from: NOW - 1000,
     });
@@ -181,7 +181,7 @@ describe("resolvePage", () => {
       { limit: 20, cursor: "abc" },
     ],
   ])("resolves %j", (input, expected) => {
-    expect(resolvePage(input)).toEqual(expected);
+    expect(resolvePage(input)).toStrictEqual(expected);
   });
 
   it.each([[{ limit: 1.5 }], [{ limit: "10" }], [{ page: 2 }]])(

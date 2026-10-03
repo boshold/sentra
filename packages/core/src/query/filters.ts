@@ -116,12 +116,25 @@ function nonEmpty(value: string | undefined): string | undefined {
   return value === "" ? undefined : value;
 }
 
+/** Drops keys whose value is `undefined`; resolved filters never carry unset keys. */
+function omitUndefined<T extends object>(value: T): T {
+  for (const key of Object.keys(value)) {
+    if (Reflect.get(value, key) === undefined) {
+      Reflect.deleteProperty(value, key);
+    }
+  }
+  return value;
+}
+
 function resolveTime(
   input: { since?: string; from?: string | number; to?: string | number },
   now: number,
 ): { from?: number; to?: number } {
   const since = input.since === undefined ? null : parseDuration(input.since);
-  return { from: since === null ? toMs(input.from) : now - since, to: toMs(input.to) };
+  return {
+    from: since === null ? toMs(input.from) : now - since,
+    to: toMs(input.to),
+  };
 }
 
 function resolveScope(input: Infer<typeof scopeFilterSchema>): ResolvedScopeFilter {
@@ -149,33 +162,33 @@ function resolveItemFields(input: Infer<typeof liveFilterSchema>): ResolvedLiveF
 }
 
 function resolveScopeFilter(input: unknown): ResolvedScopeFilter {
-  return resolveScope(parseOrThrow(scopeFilterSchema, input, "scope filter"));
+  return omitUndefined(resolveScope(parseOrThrow(scopeFilterSchema, input, "scope filter")));
 }
 
 function resolveScopeTimeFilter(input: unknown, now: number = Date.now()): ResolvedScopeTimeFilter {
   const parsed = parseOrThrow(scopeTimeFilterSchema, input, "filter");
-  return { ...resolveScope(parsed), ...resolveTime(parsed, now) };
+  return omitUndefined({ ...resolveScope(parsed), ...resolveTime(parsed, now) });
 }
 
 function resolveItemFilter(input: unknown, now: number = Date.now()): ResolvedItemFilter {
   const parsed = parseOrThrow(itemFilterSchema, input, "item filter");
-  return { ...resolveItemFields(parsed), ...resolveTime(parsed, now) };
+  return omitUndefined({ ...resolveItemFields(parsed), ...resolveTime(parsed, now) });
 }
 
 function resolveLiveFilter(input: unknown): ResolvedLiveFilter {
-  return resolveItemFields(parseOrThrow(liveFilterSchema, input, "live filter"));
+  return omitUndefined(resolveItemFields(parseOrThrow(liveFilterSchema, input, "live filter")));
 }
 
 function resolveIssueFilter(input: unknown, now: number = Date.now()): ResolvedIssueFilter {
   const parsed = parseOrThrow(issueFilterSchema, input, "issue filter");
-  return {
+  return omitUndefined({
     ...resolveScope(parsed),
     kind: toList(parsed.kind),
     level: toList(parsed.level),
     minLevel: parsed.minLevel,
     q: nonEmpty(parsed.q),
     ...resolveTime(parsed, now),
-  };
+  });
 }
 
 function resolvePage(input: unknown): ResolvedPage {

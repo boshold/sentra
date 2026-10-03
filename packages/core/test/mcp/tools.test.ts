@@ -5,9 +5,17 @@ import { ZodObject } from "zod";
 import type { Sentra } from "#src/index.js";
 import { createMcpTools } from "#src/mcp/tools.js";
 import type { McpToolDeps } from "#src/mcp/tools.js";
-import type { Issue, IssueFilter, ItemFilter } from "#src/types.js";
+import type { Issue, IssueFilter, ItemFilter, ItemSummary, SpanItem } from "#src/types.js";
 
-import { NOW, errorItem, frame, issue, libraryFrame, mapped } from "../render/factories.js";
+import {
+  NOW,
+  errorItem,
+  frame,
+  issue,
+  libraryFrame,
+  mapped,
+  spanItem,
+} from "../render/factories.js";
 
 import { seededSentra, textOf, toolByName } from "./helpers.js";
 
@@ -276,5 +284,54 @@ describe("sentra_get_item", () => {
     for (const other of page.items) {
       expect(result.text).toContain(`[${other.id}]`);
     }
+  });
+
+  describe("trace spans", () => {
+    function traceOf(durations: number[]): SpanItem[] {
+      return durations.map((durationMs, index) => ({
+        ...spanItem(durationMs),
+        id: `span-${String(index).padStart(5, "0")}`,
+        traceId: "trace-1",
+      }));
+    }
+
+    /** Newest (highest id) first, like storage. */
+    function toolsFor(spans: SpanItem[]) {
+      const byId = new Map(spans.map((span) => [span.id, span]));
+      const newestFirst = spans.toSorted((a, b) => b.id.localeCompare(a.id));
+      const listItems = vi.fn<Sentra["query"]["listItems"]>(async (_filter, page) => {
+        const start = page?.cursor === undefined ? 0 : Number(page.cursor);
+        const limit = page?.limit ?? 20;
+        const items: ItemSummary[] = newestFirst.slice(start, start + limit);
+        const next = start + limit;
+        return { items, nextCursor: next < newestFirst.length ? String(next) : null };
+      });
+      const tools = createMcpTools({
+        query: { ...sentra.query, listItems, getItem: async (id) => byId.get(id) ?? null },
+        findIssues: async () => [],
+      });
+      return { tools, listItems };
+    }
+
+    it("picks the longest spans from the whole trace and reports the true total", async () => {
+      const spans = traceOf([10_000, ...Array.from({ length: 100 }, () => 1)]);
+      const { tools } = toolsFor(spans);
+      const newest = spans.at(-1);
+      const text = textOf(
+        await toolByName(tools, "sentra_get_item").handler({ id: newest?.id ?? "" }),
+      );
+      expect(text).toContain("[span-00000]");
+      expect(text).toContain("(20 of 101 spans)");
+    });
+
+    it("pages through traces larger than one page", async () => {
+      const durations = Array.from({ length: 1201 }, (_, index) => (index === 3 ? 500 : 1));
+      const spans = traceOf(durations);
+      const { tools, listItems } = toolsFor(spans);
+      const text = textOf(await toolByName(tools, "sentra_get_item").handler({ id: "span-00003" }));
+      expect(listItems).toHaveBeenCalledTimes(3);
+      expect(text).toMatch(/## Trace spans\n\S+ db span 500 \[span-00003\]/);
+      expect(text).toContain("(20 of 1201 spans)");
+    });
   });
 });

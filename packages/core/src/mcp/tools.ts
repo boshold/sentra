@@ -26,7 +26,9 @@ type ToolResult = Awaited<ReturnType<SentraToolDefinition["handler"]>>;
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
-const TRACE_SPAN_LIMIT = 100;
+/** Page size when scanning a trace; the storage maximum. */
+const TRACE_PAGE_SIZE = 500;
+const TRACE_SPANS_SHOWN = 20;
 const FULL_ISSUE_ID_LENGTH = 16;
 const TO_NOTE = "A date-only value (2026-10-03) means midnight at the start of that day.";
 
@@ -127,16 +129,28 @@ function createMcpTools(deps: McpToolDeps): SentraToolDefinition[] {
     return first.id;
   }
 
-  async function traceSpansOf(item: Item): Promise<SpanItem[]> {
+  /** Pages through the whole trace, keeping only the longest spans and the true total. */
+  async function traceSpansOf(item: Item): Promise<{ spans: SpanItem[]; total: number }> {
     if (item.kind !== "span" || item.traceId === null) {
-      return [];
+      return { spans: [], total: 0 };
     }
-    const page = await query.listItems(
-      { traceId: item.traceId, kind: "span" },
-      { limit: TRACE_SPAN_LIMIT },
-    );
-    const items = await Promise.all(page.items.map(async (summary) => query.getItem(summary.id)));
-    return items.filter((span): span is SpanItem => span?.kind === "span");
+    let longest: SpanItem[] = [];
+    let total = 0;
+    let cursor: string | undefined = undefined;
+    do {
+      const page = await query.listItems(
+        { traceId: item.traceId, kind: "span" },
+        { limit: TRACE_PAGE_SIZE, cursor },
+      );
+      const items = await Promise.all(page.items.map(async (summary) => query.getItem(summary.id)));
+      const spans = items.filter((span): span is SpanItem => span?.kind === "span");
+      total += spans.length;
+      longest = [...longest, ...spans]
+        .toSorted((a, b) => b.data.durationMs - a.data.durationMs)
+        .slice(0, TRACE_SPANS_SHOWN);
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor !== undefined);
+    return { spans: longest, total };
   }
 
   const listScopes = object({
@@ -269,7 +283,10 @@ function createMcpTools(deps: McpToolDeps): SentraToolDefinition[] {
         if (item === null) {
           return errorResult(`Item not found: ${id}`);
         }
-        return textResult(renderItemDetail(item, { traceSpans: await traceSpansOf(item) }));
+        const trace = await traceSpansOf(item);
+        return textResult(
+          renderItemDetail(item, { traceSpans: trace.spans, traceSpanTotal: trace.total }),
+        );
       },
     }),
   ];

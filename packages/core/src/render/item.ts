@@ -207,7 +207,15 @@ function transactionLines(data: TransactionData): string[] {
   ];
 }
 
-function spanLines(data: SpanData, traceSpans: SpanItem[]): string[] {
+interface TraceSpans {
+  /** Usually already the longest spans of the trace. */
+  spans: SpanItem[];
+  /** All spans of the trace; defaults to `spans.length`. */
+  total: number;
+}
+
+function spanLines(data: SpanData, trace: TraceSpans): string[] {
+  const traceSpans = trace.spans;
   const longestSpans = longest(
     traceSpans.map((span) => ({ span, durationMs: span.data.durationMs })),
   );
@@ -226,7 +234,7 @@ function spanLines(data: SpanData, traceSpans: SpanItem[]): string[] {
         ({ span }) =>
           `${formatDuration(span.data.durationMs)} ${singleLine(span.data.op ?? "-")} ${firstLine(span.data.name)} [${span.id}]`,
       ),
-      ...truncatedNote(longestSpans.length, traceSpans.length, "spans"),
+      ...truncatedNote(longestSpans.length, trace.total, "spans"),
     ]),
   ];
 }
@@ -274,7 +282,7 @@ function otherLines(itemType: string, data: OtherData): string[] {
   ];
 }
 
-function kindLines(item: Item, traceSpans: SpanItem[]): string[] {
+function kindLines(item: Item, trace: TraceSpans): string[] {
   switch (item.kind) {
     case "error":
     case "message": {
@@ -284,7 +292,7 @@ function kindLines(item: Item, traceSpans: SpanItem[]): string[] {
       return transactionLines(item.data);
     }
     case "span": {
-      return spanLines(item.data, traceSpans);
+      return spanLines(item.data, trace);
     }
     case "log": {
       return logLines(item.data);
@@ -301,10 +309,13 @@ function kindLines(item: Item, traceSpans: SpanItem[]): string[] {
   }
 }
 
-function renderItemDetail(item: Item, context: { traceSpans?: SpanItem[] } = {}): string {
-  return sanitizeText(
-    [...headerLines(item), ...kindLines(item, context.traceSpans ?? [])].join("\n"),
-  );
+function renderItemDetail(
+  item: Item,
+  context: { traceSpans?: SpanItem[]; traceSpanTotal?: number } = {},
+): string {
+  const spans = context.traceSpans ?? [];
+  const trace = { spans, total: context.traceSpanTotal ?? spans.length };
+  return sanitizeText([...headerLines(item), ...kindLines(item, trace)].join("\n"));
 }
 
 function renderScopeTable(scopes: ScopeSummary[]): string {

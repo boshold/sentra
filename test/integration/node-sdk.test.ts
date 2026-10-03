@@ -22,7 +22,11 @@ function scenarioPath(name: string): string {
 
 async function runOk(name: string, env: Record<string, string>): Promise<void> {
   const result = await runScenario(scenarioPath(name), env);
-  expect(result.stderr).toBe("");
+  // Node runtime warnings and their --trace-warnings hint are not failures.
+  const stderr = result.stderr
+    .split("\n")
+    .filter((line) => line !== "" && !/^\((?:node:|Use `node --trace-)/.test(line));
+  expect(stderr).toEqual([]);
   expect(result.code).toBe(0);
 }
 
@@ -313,6 +317,10 @@ describe("node-tunnel scenario", () => {
     ({ sentra } = server);
   });
 
+  beforeEach(async () => {
+    await sentra.clear();
+  });
+
   afterAll(async () => {
     await server.close();
   });
@@ -321,7 +329,6 @@ describe("node-tunnel scenario", () => {
     await runOk("node-tunnel.mjs", { SENTRA_DSN: `http://sentra@127.0.0.1:${server.port}/1` });
     const error = await findOne(sentra, "error", "Error: tunneled");
     expect(error.scope).toEqual({ project: "default", session: "default", service: "default" });
-    await sentra.clear();
   });
 
   it("tunnel → scope from envelope header DSN", async () => {

@@ -1,6 +1,3 @@
-import { realpathSync } from "node:fs";
-import { pathToFileURL } from "node:url";
-
 import {
   DEFAULT_MAX_ATTACHMENT_BYTES,
   DEFAULT_MAX_ENVELOPE_BYTES,
@@ -158,22 +155,6 @@ async function runCli(
     process.stderr.write(`sentra: ${message}\n`);
     return error instanceof CliUsageError ? 2 : 1;
   }
-}
-
-function isEntryModule(): boolean {
-  const [, entry] = process.argv;
-  if (entry === undefined) {
-    return false;
-  }
-  try {
-    return import.meta.url === pathToFileURL(realpathSync(entry)).href;
-  } catch {
-    return false;
-  }
-}
-
-if (isEntryModule()) {
-  process.exitCode = await runCli(process.argv.slice(2));
 }
 
 export {

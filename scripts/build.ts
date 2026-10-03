@@ -7,8 +7,11 @@ import { build } from "esbuild";
 interface Target {
   dir: string;
   entry: string;
+  /** Output name in `dist/`, without extension. */
   out: string;
   banner?: string;
+  /** Dynamic imports become separate chunks under `dist/chunks/`. */
+  splitting?: boolean;
   declarations: boolean;
 }
 
@@ -16,12 +19,14 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 
 // Core before CLI: the CLI bundle imports core's dist at runtime.
 const TARGETS: Target[] = [
-  { dir: "packages/core", entry: "src/index.ts", out: "dist/index.mjs", declarations: true },
+  { dir: "packages/core", entry: "src/index.ts", out: "index", declarations: true },
   {
     dir: "packages/cli",
-    entry: "src/cli.ts",
-    out: "dist/cli.mjs",
+    // A tiny entry installs signal handlers before the CLI chunk and its dependencies load.
+    entry: "src/bin.ts",
+    out: "cli",
     banner: "#!/usr/bin/env node",
+    splitting: true,
     declarations: false,
   },
 ];
@@ -81,8 +86,11 @@ for (const target of TARGETS) {
   rmSync(distDir, { recursive: true, force: true });
 
   await build({
-    entryPoints: [target.entry],
-    outfile: target.out,
+    entryPoints: [{ in: target.entry, out: target.out }],
+    outdir: distDir,
+    outExtension: { ".js": ".mjs" },
+    splitting: target.splitting ?? false,
+    chunkNames: "chunks/[name]-[hash]",
     absWorkingDir: absDir,
     bundle: true,
     platform: "node",
@@ -103,6 +111,6 @@ for (const target of TARGETS) {
   }
 
   if (target.banner) {
-    chmodSync(path.join(absDir, target.out), 0o755);
+    chmodSync(path.join(distDir, `${target.out}.mjs`), 0o755);
   }
 }

@@ -269,4 +269,14 @@ describe("start", () => {
     expect(process.listenerCount("SIGINT")).toBe(before);
     expect(process.listenerCount("SIGTERM")).toBe(0);
   });
+
+  it("handles a signal that arrives during startup", async () => {
+    const before = process.listenerCount("SIGTERM");
+    const done = start(memoryConfig({ quiet: true }));
+    // Registered synchronously, before the server listens.
+    expect(process.listenerCount("SIGTERM")).toBe(before + 1);
+    process.emit("SIGTERM");
+    await done;
+    expect(process.listenerCount("SIGTERM")).toBe(before);
+  });
 });

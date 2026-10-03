@@ -230,9 +230,11 @@ async function startServer(
 
 const SIGNALS = ["SIGINT", "SIGTERM"] as const;
 
-/** Starts the server and resolves after a clean shutdown on SIGINT/SIGTERM; a second signal exits 1. */
+/**
+ * Starts the server and resolves after a clean shutdown on SIGINT/SIGTERM; a second signal exits 1.
+ * Handlers are registered before startup, so a signal right after the banner still shuts down cleanly.
+ */
 async function start(config: StartConfig): Promise<void> {
-  const running = await startServer(config);
   const waiters: (() => void)[] = [];
   const signalled = new Promise<void>((resolve) => {
     waiters.push(resolve);
@@ -251,6 +253,7 @@ async function start(config: StartConfig): Promise<void> {
     process.on(signal, onSignal);
   }
   try {
+    const running = await startServer(config);
     await signalled;
     await running.close();
   } finally {

@@ -1,17 +1,12 @@
-import { record, string, unknown } from "zod";
-
-import { normalizeEventId, truncate } from "#src/normalize/schemas.js";
-import { baseSummary } from "#src/normalize/summary.js";
+import { jsonObjectSchema, normalizeEventId, truncate } from "#src/normalize/schemas.js";
+import { ITEM_TITLE_MAX, baseSummary } from "#src/normalize/summary.js";
 import { toIsoTimestamp } from "#src/normalize/time.js";
 import type { NewItem, NormalizeContext } from "#src/normalize/types.js";
 import type { ParsedItem } from "#src/parse/envelope.js";
 import type { OtherData } from "#src/types.js";
 
-const TITLE_MAX = 500;
-
 const utf8 = new TextDecoder("utf-8", { fatal: true });
 const encoder = new TextEncoder();
-const payloadObjectSchema = record(string(), unknown());
 
 type Decoded =
   | { encoding: "json"; value: unknown }
@@ -45,13 +40,13 @@ function otherRecord(
   data: OtherData,
   blob: Uint8Array | null,
 ): NewItem {
-  const object = payloadObjectSchema.safeParse(data.payload);
+  const object = jsonObjectSchema.safeParse(data.payload);
   const json = data.payloadEncoding === "json" && object.success ? object.data : null;
   const summary = baseSummary(ctx, {
     itemType,
     timestamp: toIsoTimestamp(json?.timestamp, ctx.receivedAt),
     eventId: normalizeEventId(json?.event_id),
-    title: truncate(itemType, TITLE_MAX),
+    title: truncate(itemType, ITEM_TITLE_MAX),
   });
   return { item: { ...summary, kind: "other", data }, blob, grouping: null, warnings: [] };
 }

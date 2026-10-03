@@ -1,14 +1,14 @@
-import { record, string, unknown } from "zod";
 import type { infer as Infer } from "zod";
 
 import {
   collectDropped,
   contextsSchema,
+  jsonObjectSchema,
   normalizeEventId,
   transactionPayloadSchema,
   truncate,
 } from "#src/normalize/schemas.js";
-import { baseSummary } from "#src/normalize/summary.js";
+import { ITEM_TITLE_MAX, baseSummary } from "#src/normalize/summary.js";
 import { durationMs, parseTimestampMs, toIso, toIsoTimestamp } from "#src/normalize/time.js";
 import type { NormalizeContext, NormalizeResult } from "#src/normalize/types.js";
 import type { SpanSummary, TransactionData } from "#src/types.js";
@@ -17,7 +17,6 @@ type TransactionPayload = Infer<typeof transactionPayloadSchema>;
 type TransactionSpan = NonNullable<TransactionPayload["spans"]>[number];
 type TraceContext = NonNullable<Infer<typeof contextsSchema>["trace"]>;
 
-const TITLE_MAX = 500;
 const UNNAMED = "<unnamed transaction>";
 
 const TRANSACTION_KEYS = [
@@ -35,8 +34,6 @@ const TRANSACTION_KEYS = [
   "contexts",
   "sdk",
 ] as const;
-
-const payloadObjectSchema = record(string(), unknown());
 
 function toSpanSummary(span: TransactionSpan, fallbackStart: string): SpanSummary[] {
   if (span.span_id === undefined) {
@@ -97,7 +94,7 @@ function buildData(
 }
 
 function normalizeTransaction(payload: unknown, ctx: NormalizeContext): NormalizeResult {
-  const input = payloadObjectSchema.safeParse(payload);
+  const input = jsonObjectSchema.safeParse(payload);
   const parsed = transactionPayloadSchema.safeParse(payload);
   if (!input.success || !parsed.success) {
     return { ok: false, error: "transaction payload is not a JSON object" };
@@ -114,7 +111,7 @@ function normalizeTransaction(payload: unknown, ctx: NormalizeContext): Normaliz
     environment: transaction.environment ?? null,
     release: transaction.release ?? null,
     platform: transaction.platform ?? null,
-    title: truncate(data.name, TITLE_MAX),
+    title: truncate(data.name, ITEM_TITLE_MAX),
   });
   const warnings = collectDropped(input.data, transaction, TRANSACTION_KEYS).map(
     (key) => `transaction: dropped invalid field '${key}'`,

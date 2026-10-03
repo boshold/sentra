@@ -1,6 +1,9 @@
 import type { NormalizeContext } from "#src/normalize/types.js";
 import type { ItemSummary } from "#src/types.js";
 
+/** Max length of `ItemSummary.title`. */
+const ITEM_TITLE_MAX = 500;
+
 type SummaryFields = Pick<ItemSummary, "itemType" | "timestamp" | "title"> &
   Partial<Omit<ItemSummary, "id" | "envelopeId" | "scope" | "receivedAt" | "kind">>;
 
@@ -30,4 +33,4 @@ function stringAttribute(
   return typeof value === "string" ? value : null;
 }
 
-export { baseSummary, stringAttribute };
+export { baseSummary, ITEM_TITLE_MAX, stringAttribute };

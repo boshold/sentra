@@ -2,12 +2,10 @@ import { flattenAttributes } from "#src/normalize/attributes.js";
 import { normalizeLevel } from "#src/normalize/level.js";
 import { otherFromEntry } from "#src/normalize/other.js";
 import { logContainerSchema, logEntrySchema, truncate } from "#src/normalize/schemas.js";
-import { baseSummary, stringAttribute } from "#src/normalize/summary.js";
+import { ITEM_TITLE_MAX, baseSummary, stringAttribute } from "#src/normalize/summary.js";
 import { toIsoTimestamp } from "#src/normalize/time.js";
 import type { NewItem, NormalizeContext, NormalizeResult } from "#src/normalize/types.js";
 import type { LogData } from "#src/types.js";
-
-const TITLE_MAX = 500;
 
 function normalizeLogEntry(entry: unknown, ctx: NormalizeContext): NewItem {
   const parsed = logEntrySchema.safeParse(entry);
@@ -32,7 +30,7 @@ function normalizeLogEntry(entry: unknown, ctx: NormalizeContext): NewItem {
     level: normalizeLevel(log.level) ?? "info",
     environment: stringAttribute(attributes, "sentry.environment"),
     release: stringAttribute(attributes, "sentry.release"),
-    title: truncate(log.body, TITLE_MAX),
+    title: truncate(log.body, ITEM_TITLE_MAX),
   });
   return { item: { ...summary, kind: "log", data }, blob: null, grouping: null, warnings: [] };
 }

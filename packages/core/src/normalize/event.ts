@@ -1,4 +1,3 @@
-import { record, string, unknown } from "zod";
 import type { infer as Infer } from "zod";
 
 import { normalizeFrames } from "#src/normalize/frames.js";
@@ -8,9 +7,11 @@ import {
   collectDropped,
   contextsSchema,
   eventPayloadSchema,
+  jsonObjectSchema,
   normalizeEventId,
   truncate,
 } from "#src/normalize/schemas.js";
+import { ITEM_TITLE_MAX } from "#src/normalize/summary.js";
 import { toIsoTimestamp } from "#src/normalize/time.js";
 import type { GroupingInput, NormalizeContext, NormalizeResult } from "#src/normalize/types.js";
 import type { EventData, Exception, Frame, Item, ItemSummary } from "#src/types.js";
@@ -20,7 +21,6 @@ type ExceptionValue = NonNullable<NonNullable<EventPayload["exception"]>["values
 
 type EventKind = "error" | "message";
 
-const TITLE_MAX = 500;
 const UNKNOWN_TITLE = "<unknown error>";
 const DEFAULT_MECHANISM_TYPE = "generic";
 
@@ -50,8 +50,6 @@ const EVENT_KEYS = [
   "breadcrumbs",
   "sdk",
 ] as const;
-
-const payloadObjectSchema = record(string(), unknown());
 
 function nonEmpty(value: string | undefined): string | null {
   return value === undefined || value === "" ? null : value;
@@ -165,7 +163,7 @@ function resolveTitle(kind: EventKind, data: EventData): string {
     kind === "error"
       ? errorTitle(data.exceptions.at(-1))
       : (nonEmpty(data.message ?? undefined) ?? UNKNOWN_TITLE);
-  return truncate(title, TITLE_MAX);
+  return truncate(title, ITEM_TITLE_MAX);
 }
 
 function buildSummary(
@@ -193,7 +191,7 @@ function buildSummary(
 }
 
 function normalizeEvent(payload: unknown, ctx: NormalizeContext): NormalizeResult {
-  const input = payloadObjectSchema.safeParse(payload);
+  const input = jsonObjectSchema.safeParse(payload);
   const parsed = eventPayloadSchema.safeParse(payload);
   if (!input.success || !parsed.success) {
     return { ok: false, error: "event payload is not a JSON object" };

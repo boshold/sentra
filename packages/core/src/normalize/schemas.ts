@@ -77,7 +77,7 @@ function truncate(text: string, max: number): string {
   return `${text.slice(0, end)}…`;
 }
 
-const objectSchema = record(string(), unknown());
+const jsonObjectSchema = record(string(), unknown());
 const timestampSchema = union([number(), string()]);
 const primitiveSchema = union([string(), number(), boolean()]);
 
@@ -91,7 +91,7 @@ function stringifyTagValue(value: unknown): string | undefined {
   return undefined;
 }
 
-const tagsSchema = union([array(unknown()), objectSchema]).transform((input) => {
+const tagsSchema = union([array(unknown()), jsonObjectSchema]).transform((input) => {
   const entries: [unknown, unknown][] = Array.isArray(input)
     ? input.flatMap((pair): [unknown, unknown][] =>
         Array.isArray(pair) && pair.length === 2 ? [[pair[0], pair[1]]] : [],
@@ -113,7 +113,7 @@ const breadcrumbEntrySchema = looseObject({
   category: lenient(string()),
   level: lenient(string()),
   message: lenient(string()),
-  data: lenient(objectSchema),
+  data: lenient(jsonObjectSchema),
 });
 
 const breadcrumbsSchema = union([
@@ -159,8 +159,8 @@ function serializeQuery(input: string | Record<string, unknown> | unknown[]): st
 const requestSchema = looseObject({
   method: lenient(string()),
   url: lenient(string()),
-  headers: lenient(objectSchema),
-  query_string: lenient(union([string(), objectSchema, array(unknown())])),
+  headers: lenient(jsonObjectSchema),
+  query_string: lenient(union([string(), jsonObjectSchema, array(unknown())])),
   data: unknown().optional(),
 }).transform((request): RequestInfo => ({
   method: request.method ?? null,
@@ -240,11 +240,11 @@ const commonEventShape = {
   dist: lenient(string()),
   server_name: lenient(string()),
   transaction: lenient(string()),
-  user: lenient(objectSchema),
+  user: lenient(jsonObjectSchema),
   request: lenient(requestSchema),
   tags: lenient(tagsSchema),
-  contexts: lenient(objectSchema),
-  extra: lenient(objectSchema),
+  contexts: lenient(jsonObjectSchema),
+  extra: lenient(jsonObjectSchema),
   breadcrumbs: lenient(breadcrumbsSchema),
   sdk: lenient(sdkSchema),
 };
@@ -306,7 +306,7 @@ const spanEntrySchema = looseObject({
   status: lenient(string()),
   start_timestamp: lenient(timestampSchema),
   end_timestamp: lenient(timestampSchema),
-  attributes: lenient(objectSchema),
+  attributes: lenient(jsonObjectSchema),
 });
 
 const logContainerSchema = looseObject({ items: array(unknown()) });
@@ -318,10 +318,11 @@ const logEntrySchema = looseObject({
   trace_id: lenient(string()),
   span_id: lenient(string()),
   severity_number: lenient(number()),
-  attributes: lenient(objectSchema),
+  attributes: lenient(jsonObjectSchema),
 });
 
 export {
+  jsonObjectSchema,
   contextsSchema,
   traceContextSchema,
   lenientArray,

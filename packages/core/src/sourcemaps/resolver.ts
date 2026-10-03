@@ -3,13 +3,14 @@ import path from "node:path";
 import { SentraConfigError } from "#src/errors.js";
 import type { MapFramesStep } from "#src/ingest/pipeline.js";
 import {
+  cacheEntryFor,
   createSourceMapCache,
   fsCacheKey,
   httpCacheKey,
   isCacheable,
 } from "#src/sourcemaps/cache.js";
 import type { CachedSource } from "#src/sourcemaps/cache.js";
-import type { LoadResult } from "#src/sourcemaps/extract.js";
+import type { HttpValidators, LoadResult } from "#src/sourcemaps/extract.js";
 import {
   loadFsSourceMap,
   readSourceInsideRoots,
@@ -17,7 +18,7 @@ import {
   resolveRoots,
 } from "#src/sourcemaps/fs-loader.js";
 import { isAllowedUrl, normalizeAllowedHosts } from "#src/sourcemaps/hosts.js";
-import { loadHttpSourceMap } from "#src/sourcemaps/http-loader.js";
+import { isModuleUnchanged, loadHttpSourceMap } from "#src/sourcemaps/http-loader.js";
 import { createBudget, createTraceMap, mapFrame } from "#src/sourcemaps/mapper.js";
 import type { Budget } from "#src/sourcemaps/mapper.js";
 import { classifyLocation, frameLocation } from "#src/sourcemaps/paths.js";
@@ -31,6 +32,8 @@ interface SourceMapResolverOptions {
   fetchTimeoutMs: number;
   budgetMs: number;
   logger: SentraLogger;
+  /** Clock for cache expiry; defaults to `Date.now`. */
+  now?: () => number;
 }
 
 interface SourceMapResolver {
@@ -44,7 +47,10 @@ interface SourceMapResolver {
 
 interface Candidate {
   key: string;
+  origin: "http" | "fs";
   load: () => Promise<LoadResult>;
+  /** HTTP only: conditional request against the cached validators. */
+  isUnchanged?: (validators: HttpValidators) => Promise<boolean>;
 }
 
 interface ResolveContext {
@@ -136,6 +142,7 @@ function createSourceMapResolver(options: SourceMapResolverOptions): SourceMapRe
       : new Set(options.sourceRoots.map(absoluteDir));
   const hostSet = normalizeAllowedHosts(options.allowedHosts);
   const cache = createSourceMapCache();
+  const now = options.now ?? Date.now;
 
   async function classify(location: string, ctx: ResolveContext): Promise<Candidate | null> {
     const classified = classifyLocation(location);
@@ -144,14 +151,16 @@ function createSourceMapResolver(options: SourceMapResolverOptions): SourceMapRe
       if (!isAllowedUrl(url, hostSet)) {
         return null;
       }
+      const loaderOptions = {
+        allowedHosts: hostSet,
+        timeoutMs: options.fetchTimeoutMs,
+        signal: ctx.deadline,
+      };
       return {
         key: httpCacheKey(url),
-        load: async () =>
-          loadHttpSourceMap(url, {
-            allowedHosts: hostSet,
-            timeoutMs: options.fetchTimeoutMs,
-            signal: ctx.deadline,
-          }),
+        origin: "http",
+        load: async () => loadHttpSourceMap(url, loaderOptions),
+        isUnchanged: async (validators) => isModuleUnchanged(url, validators, loaderOptions),
       };
     }
     if (classified.kind === "file") {
@@ -161,15 +170,43 @@ function createSourceMapResolver(options: SourceMapResolverOptions): SourceMapRe
       }
       return {
         key: fsCacheKey(file.realPath, file.mtimeMs),
+        origin: "fs",
         load: async () => loadFsSourceMap(file, ctx.realRoots),
       };
     }
     return null;
   }
 
-  async function load(candidate: Candidate, ctx: ResolveContext): Promise<CachedSource> {
+  /** A fresh cache hit, after revalidation when the entry carries validators. */
+  async function cachedFor(
+    candidate: Candidate,
+    ctx: ResolveContext,
+  ): Promise<CachedSource | null> {
     const cached = cache.get(candidate.key);
-    if (cached !== undefined) {
+    if (cached === undefined) {
+      return null;
+    }
+    if (cached.expiresAt !== null && now() >= cached.expiresAt) {
+      cache.delete(candidate.key);
+      return null;
+    }
+    if (
+      cached.validators === null ||
+      candidate.isUnchanged === undefined ||
+      ctx.budget.exceeded()
+    ) {
+      return cached.source;
+    }
+    if (await candidate.isUnchanged(cached.validators)) {
+      return cached.source;
+    }
+    cache.delete(candidate.key);
+    return null;
+  }
+
+  async function load(candidate: Candidate, ctx: ResolveContext): Promise<CachedSource> {
+    const cached = await cachedFor(candidate, ctx);
+    if (cached !== null) {
       return cached;
     }
     if (ctx.budget.exceeded()) {
@@ -183,7 +220,7 @@ function createSourceMapResolver(options: SourceMapResolverOptions): SourceMapRe
         : loaded;
     const entry = await toCached(result);
     if (isCacheable(entry.result)) {
-      cache.set(candidate.key, entry);
+      cache.set(candidate.key, cacheEntryFor(entry, candidate.origin, now()));
     }
     return entry;
   }

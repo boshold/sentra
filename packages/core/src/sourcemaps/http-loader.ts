@@ -4,7 +4,7 @@ import {
   parseSourceMap,
   resolveMapReference,
 } from "#src/sourcemaps/extract.js";
-import type { LoadResult } from "#src/sourcemaps/extract.js";
+import type { HttpValidators, LoadResult } from "#src/sourcemaps/extract.js";
 import { isAllowedUrl } from "#src/sourcemaps/hosts.js";
 
 interface HttpLoaderOptions {
@@ -128,11 +128,46 @@ async function fetchLimited(
   }
 }
 
-function toLoaded(json: string, sourcesBase: string): LoadResult {
+function validatorsOf(headers: Headers): HttpValidators | null {
+  const etag = headers.get("etag");
+  const lastModified = headers.get("last-modified");
+  return etag === null && lastModified === null ? null : { etag, lastModified };
+}
+
+function toLoaded(
+  json: string,
+  sourcesBase: string,
+  validators: HttpValidators | null,
+): LoadResult {
   const map = parseSourceMap(json);
   return map === null
     ? { status: "failed", reason: "invalid_source_map" }
-    : { status: "loaded", map, sourcesBase, origin: "http" };
+    : { status: "loaded", map, sourcesBase, origin: "http", validators };
+}
+
+/** Conditional GET of the module; `true` only for `304 Not Modified`. Never throws. */
+async function isModuleUnchanged(
+  url: URL,
+  validators: HttpValidators,
+  options: HttpLoaderOptions,
+): Promise<boolean> {
+  const timeout = AbortSignal.timeout(options.timeoutMs);
+  const signal =
+    options.signal === undefined ? timeout : AbortSignal.any([timeout, options.signal]);
+  const headers: Record<string, string> = { accept: "*/*" };
+  if (validators.etag !== null) {
+    headers["if-none-match"] = validators.etag;
+  }
+  if (validators.lastModified !== null) {
+    headers["if-modified-since"] = validators.lastModified;
+  }
+  try {
+    const response = await fetch(url, { redirect: "manual", signal, credentials: "omit", headers });
+    await cancelBody(response);
+    return response.status === 304;
+  } catch {
+    return false;
+  }
 }
 
 /** Fetches a module from an allowed dev server and returns its source map. Never throws. */
@@ -153,8 +188,9 @@ async function loadHttpSourceMap(url: URL, options: HttpLoaderOptions): Promise<
   if (reference === null || reference.kind === "path") {
     return { status: "failed", reason: "invalid_source_map" };
   }
+  const validators = validatorsOf(headers);
   if (reference.kind === "inline") {
-    return toLoaded(reference.json, finalUrl.href);
+    return toLoaded(reference.json, finalUrl.href, validators);
   }
   const mapUrl = new URL(reference.url);
   if (mapUrl.origin !== finalUrl.origin || !isAllowedUrl(mapUrl, options.allowedHosts)) {
@@ -164,8 +200,8 @@ async function loadHttpSourceMap(url: URL, options: HttpLoaderOptions): Promise<
   if (!mapResult.ok) {
     return { status: "failed", reason: mapResult.reason };
   }
-  return toLoaded(mapResult.text, mapResult.finalUrl.href);
+  return toLoaded(mapResult.text, mapResult.finalUrl.href, validators);
 }
 
-export { loadHttpSourceMap };
+export { isModuleUnchanged, loadHttpSourceMap };
 export type { HttpLoaderOptions };

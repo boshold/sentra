@@ -22,6 +22,7 @@ let origin = "";
 let base = "";
 let root = "";
 const requests: string[] = [];
+const mutable = { version: 1, hasMap: false };
 
 function inline(map: object): string {
   return `//# sourceMappingURL=data:application/json;base64,${Buffer.from(JSON.stringify(map)).toString("base64")}`;
@@ -141,7 +142,21 @@ beforeAll(async () => {
       res.writeHead(200, { "content-type": "text/javascript" });
       res.end(body);
     };
-    if (pathname.startsWith("/mod")) {
+    const versionMap = inline({ ...moduleMap, sources: [`v${mutable.version}.ts`] });
+    if (pathname === "/mut-etag.js") {
+      const etag = `"v${mutable.version}"`;
+      if (req.headers["if-none-match"] === etag) {
+        res.writeHead(304, { etag });
+        res.end();
+        return;
+      }
+      res.writeHead(200, { "content-type": "text/javascript", etag });
+      res.end(`a();\nthrow 1;\n${versionMap}\n`);
+    } else if (pathname === "/mut-plain.js") {
+      js(`a();\nthrow 1;\n${versionMap}\n`);
+    } else if (pathname === "/late-map.js") {
+      js(`a();\nthrow 1;\n${mutable.hasMap ? versionMap : ""}\n`);
+    } else if (pathname.startsWith("/mod")) {
       js(`a();\nthrow 1;\n${inline(moduleMap)}\n`);
     } else if (pathname === "/spa.vue") {
       res.writeHead(200, { "content-type": "text/html" });
@@ -279,6 +294,66 @@ describe("resolveEvents", () => {
     expect(second.sourceMaps.status).toBe("full");
     await instance.resolveEvents([event([frame(`${url}?t=2`, 2)])]);
     expect(count("/mod-cache.js?t=2")).toBe(1);
+  });
+
+  describe("http cache revalidation", () => {
+    let clock = 0;
+    const now = (): number => clock;
+
+    beforeEach(() => {
+      clock = 1_000_000;
+      mutable.version = 1;
+      mutable.hasMap = false;
+      requests.length = 0;
+    });
+
+    async function sourceOf(
+      instance: ReturnType<typeof resolver>,
+      url: string,
+    ): Promise<string | null> {
+      const data = event([frame(url, 2)]);
+      await instance.resolveEvents([data]);
+      return framesOf(data)[0]?.mapped?.source ?? null;
+    }
+
+    it("maps a rebuilt module with a new ETag to the new version", async () => {
+      const url = `${origin}/mut-etag.js`;
+      const instance = resolver({ now });
+      expect(await sourceOf(instance, url)).toBe("v1.ts");
+      expect(await sourceOf(instance, url)).toBe("v1.ts");
+      expect(count("/mut-etag.js")).toBe(2);
+      mutable.version = 2;
+      expect(await sourceOf(instance, url)).toBe("v2.ts");
+      expect(count("/mut-etag.js")).toBe(4);
+    });
+
+    it("reloads a module without validators after 30 s", async () => {
+      const url = `${origin}/mut-plain.js`;
+      const instance = resolver({ now });
+      expect(await sourceOf(instance, url)).toBe("v1.ts");
+      mutable.version = 2;
+      clock += 29_999;
+      expect(await sourceOf(instance, url)).toBe("v1.ts");
+      expect(count("/mut-plain.js")).toBe(1);
+      clock += 1;
+      expect(await sourceOf(instance, url)).toBe("v2.ts");
+      expect(count("/mut-plain.js")).toBe(2);
+    });
+
+    it("retries a cached failure after 5 s", async () => {
+      const url = `${origin}/late-map.js`;
+      const instance = resolver({ now });
+      const first = event([frame(url, 2)]);
+      await instance.resolveEvents([first]);
+      expect(first.sourceMaps.errors).toEqual([{ absPath: url, reason: "no_source_map" }]);
+      mutable.hasMap = true;
+      clock += 4999;
+      expect(await sourceOf(instance, url)).toBeNull();
+      expect(count("/late-map.js")).toBe(1);
+      clock += 1;
+      expect(await sourceOf(instance, url)).toBe("v1.ts");
+      expect(count("/late-map.js")).toBe(2);
+    });
   });
 
   it("dedupes loads across events of one envelope", async () => {

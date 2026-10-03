@@ -3,7 +3,7 @@ import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 
 import { LOOPBACK_HOSTS, isAllowedUrl, normalizeAllowedHosts } from "#src/sourcemaps/hosts.js";
-import { loadHttpSourceMap } from "#src/sourcemaps/http-loader.js";
+import { isModuleUnchanged, loadHttpSourceMap } from "#src/sourcemaps/http-loader.js";
 import type { HttpLoaderOptions } from "#src/sourcemaps/http-loader.js";
 
 type Handler = (req: IncomingMessage, res: ServerResponse) => void;
@@ -58,6 +58,15 @@ function routes(): Record<string, Handler> {
         SourceMap: "missing.js.map",
       }),
     "/nomap.js": (_req, res) => js(res, "export default 1;\n"),
+    "/etag.js": (req, res) => {
+      const headers = { etag: '"v1"', "last-modified": "Wed, 01 Jan 2025 00:00:00 GMT" };
+      if (req.headers["if-none-match"] === '"v1"') {
+        res.writeHead(304, headers);
+        res.end();
+        return;
+      }
+      js(res, `//# sourceMappingURL=${inlineBase64}`, headers);
+    },
     "/badmap.js": (_req, res) =>
       js(res, `//# sourceMappingURL=data:application/json;base64,${badMap}`),
     "/pathmap.js": (_req, res) => js(res, "//# sourceMappingURL=file:///etc/passwd"),
@@ -158,6 +167,14 @@ describe("loadHttpSourceMap", () => {
       map,
       sourcesBase: `${main.origin}/ok.js?t=5`,
       origin: "http",
+      validators: null,
+    });
+  });
+
+  it("keeps the module's ETag and Last-Modified as validators", async () => {
+    expect(await load("/etag.js")).toMatchObject({
+      status: "loaded",
+      validators: { etag: '"v1"', lastModified: "Wed, 01 Jan 2025 00:00:00 GMT" },
     });
   });
 
@@ -316,5 +333,39 @@ describe("isAllowedUrl", () => {
 
   it("includes the loopback defaults", () => {
     expect([...normalizeAllowedHosts([])].toSorted()).toEqual([...LOOPBACK_HOSTS].toSorted());
+  });
+});
+
+describe("isModuleUnchanged", () => {
+  const url = (path: string): URL => new URL(path, main.origin);
+
+  it("is true only for 304 Not Modified", async () => {
+    expect(
+      await isModuleUnchanged(url("/etag.js"), { etag: '"v1"', lastModified: null }, options()),
+    ).toBe(true);
+    expect(
+      await isModuleUnchanged(url("/etag.js"), { etag: '"v2"', lastModified: null }, options()),
+    ).toBe(false);
+    expect(
+      await isModuleUnchanged(url("/ok.js"), { etag: null, lastModified: "x" }, options()),
+    ).toBe(false);
+  });
+
+  it("sends both validators", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    await isModuleUnchanged(url("/etag.js"), { etag: '"v1"', lastModified: "lm" }, options());
+    const init = fetchSpy.mock.calls[0]?.[1];
+    expect(new Headers(init?.headers).get("if-none-match")).toBe('"v1"');
+    expect(new Headers(init?.headers).get("if-modified-since")).toBe("lm");
+  });
+
+  it("is false when the request fails", async () => {
+    expect(
+      await isModuleUnchanged(
+        url("/slow.js"),
+        { etag: '"v1"', lastModified: null },
+        options({ timeoutMs: 20 }),
+      ),
+    ).toBe(false);
   });
 });

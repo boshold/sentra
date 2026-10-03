@@ -1,18 +1,22 @@
 import { TraceMap } from "@jridgewell/trace-mapping";
 
 import {
+  HTTP_FAILURE_TTL_MS,
+  HTTP_UNVALIDATED_TTL_MS,
   SOURCE_MAP_CACHE_SIZE,
+  cacheEntryFor,
   createSourceMapCache,
   fsCacheKey,
   httpCacheKey,
   isCacheable,
 } from "#src/sourcemaps/cache.js";
-import type { CachedSource } from "#src/sourcemaps/cache.js";
-import type { LoadResult } from "#src/sourcemaps/extract.js";
+import type { CacheEntry, CachedSource } from "#src/sourcemaps/cache.js";
+import type { LoadResult, RawSourceMap } from "#src/sourcemaps/extract.js";
 
-const failed: CachedSource = {
-  result: { status: "failed", reason: "no_source_map" },
-  traceMap: null,
+const failed: CacheEntry = {
+  source: { result: { status: "failed", reason: "no_source_map" }, traceMap: null },
+  expiresAt: null,
+  validators: null,
 };
 
 describe("createSourceMapCache", () => {
@@ -35,15 +39,22 @@ describe("createSourceMapCache", () => {
     const traceMap = new TraceMap(map);
     const cache = createSourceMapCache(2);
     cache.set("a", {
-      result: {
-        status: "loaded",
-        map: { ...map, sources: ["a.ts"], names: [] },
-        sourcesBase: "",
-        origin: "fs",
+      source: {
+        result: {
+          status: "loaded",
+          map: { ...map, sources: ["a.ts"], names: [] },
+          sourcesBase: "",
+          origin: "fs",
+        },
+        traceMap,
       },
-      traceMap,
+      expiresAt: null,
+      validators: null,
     });
-    expect(cache.get("a")?.traceMap).toBe(traceMap);
+    expect(cache.get("a")?.source.traceMap).toBe(traceMap);
+    cache.delete("a");
+    expect(cache.get("a")).toBeUndefined();
+    cache.set("b", failed);
     cache.clear();
     expect(cache.size).toBe(0);
   });
@@ -97,5 +108,52 @@ describe("isCacheable", () => {
     ["skipped outside_source_root", { status: "skipped", reason: "outside_source_root" }, false],
   ])("%s → %s", (_name, result, expected) => {
     expect(isCacheable(result)).toBe(expected);
+  });
+});
+
+describe("cacheEntryFor", () => {
+  const map: RawSourceMap = { version: 3, sources: [], names: [], mappings: "" };
+  function loaded(result: LoadResult): CachedSource {
+    return { result, traceMap: null };
+  }
+  const httpLoaded = (etag: string | null): CachedSource =>
+    loaded({
+      status: "loaded",
+      map,
+      sourcesBase: "http://localhost/a.js",
+      origin: "http",
+      validators: etag === null ? null : { etag, lastModified: null },
+    });
+
+  it("never expires fs entries", () => {
+    expect(cacheEntryFor(httpLoaded(null), "fs", 1000)).toMatchObject({
+      expiresAt: null,
+      validators: null,
+    });
+  });
+
+  it("expires http failures after the failure TTL", () => {
+    expect(HTTP_FAILURE_TTL_MS).toBe(5000);
+    const source = loaded({ status: "failed", reason: "no_source_map" });
+    expect(cacheEntryFor(source, "http", 1000)).toEqual({
+      source,
+      expiresAt: 6000,
+      validators: null,
+    });
+  });
+
+  it("expires http maps without validators after the unvalidated TTL", () => {
+    expect(HTTP_UNVALIDATED_TTL_MS).toBe(30_000);
+    expect(cacheEntryFor(httpLoaded(null), "http", 1000)).toMatchObject({
+      expiresAt: 31_000,
+      validators: null,
+    });
+  });
+
+  it("keeps http maps with validators for revalidation", () => {
+    expect(cacheEntryFor(httpLoaded('"v1"'), "http", 1000)).toMatchObject({
+      expiresAt: null,
+      validators: { etag: '"v1"', lastModified: null },
+    });
   });
 });

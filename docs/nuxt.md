@@ -161,4 +161,4 @@ Each error/message record has `data.sourceMaps` with `status` (`not_applicable`,
 
 Frames on hosts outside `sourceMaps.allowedHosts` (loopback by default) and files outside the source roots are not candidates: they are not listed in `errors`, and `status` is `not_applicable` when no frame is a candidate.
 
-If browser frames map to the wrong line after restarting the dev server with a changed config, restart Sentra: cached maps are keyed by URL, and Vite only changes the URL (`?t=`) on HMR updates.
+Sentra caches source maps by URL. Before reusing a cached map it asks the dev server whether the module changed (`If-None-Match` / `If-Modified-Since`; Vite answers `304` when it did not). Servers that send no `ETag` or `Last-Modified` get the map reloaded after 30 s, and failed lookups such as `no_source_map` are retried after 5 s.

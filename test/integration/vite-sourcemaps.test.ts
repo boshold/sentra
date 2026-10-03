@@ -107,7 +107,10 @@ async function startVite(root: string): Promise<void> {
   origin = `http://127.0.0.1:${port}`;
   cardUrl = `${origin}/src/components/Card.vue`;
   const response = await fetch(cardUrl);
-  expect(response.headers.get("content-type")).toMatch(/javascript/);
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("javascript")) {
+    throw new Error(`vite served Card.vue as ${contentType} (${response.status})`);
+  }
   cardCode = await response.text();
 }
 
@@ -129,7 +132,9 @@ async function buildNitroBundle(appRoot: string): Promise<void> {
     await writeFile(bundlePath, bundleCode);
   }
   const map: unknown = JSON.parse(await readFile(`${bundlePath}.map`, "utf8"));
-  expect(map).not.toHaveProperty("sourcesContent");
+  if (typeof map !== "object" || map === null || "sourcesContent" in map) {
+    throw new Error("nitro-style map must not contain sourcesContent");
+  }
 }
 
 async function writeOutside(): Promise<void> {

@@ -62,6 +62,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm test --coverage
+        env:
+          SENTRA_REQUIRE_SQLITE_DRIVERS: better-sqlite3,node
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always() && matrix.node-version == 22
         with:
@@ -84,7 +86,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
 
-  # Placeholder: runs the core unit tests under Bun; extended by P03-T06.
+  # Core unit tests under the Bun runtime, then the Bun compile smoke test.
   bun-tests:
     name: Bun Tests
     runs-on: ubuntu-latest
@@ -102,6 +104,10 @@ jobs:
           bun-version-file: ".bun-version"
       - run: pnpm install --frozen-lockfile
       - run: cd packages/core && bun --bun x vitest run
+        env:
+          SENTRA_REQUIRE_SQLITE_DRIVERS: node
+      - run: pnpm build
+      - run: pnpm smoke:bun
 
   integration-tests:
     name: Integration Tests

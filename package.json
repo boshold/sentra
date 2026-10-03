@@ -17,7 +17,8 @@
     "lint": "oxfmt --check && oxlint --type-aware --deny-warnings",
     "lint:fix": "oxfmt --write && oxlint --type-aware --fix --deny-warnings",
     "check": "pnpm typecheck && pnpm lint && pnpm build && pnpm test:coverage",
-    "capture:fixtures": "tsx scripts/capture-fixtures.ts"
+    "capture:fixtures": "tsx scripts/capture-fixtures.ts",
+    "smoke:bun": "tsx scripts/bun-compile-smoke.ts"
   },
   "devDependencies": {
     "@bosdev/sentra-core": "workspace:*",

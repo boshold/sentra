@@ -1,0 +1,5 @@
+{
+  "//": "No `paths` here: Bun then resolves @bosdev/sentra-core to the built dist via package exports.",
+  "extends": "../../../tsconfig.base.json",
+  "include": ["host.ts"]
+}

@@ -1,5 +1,5 @@
 import { array, boolean, looseObject, number, record, string, union, unknown } from "zod";
-import type { ZodType } from "zod";
+import type { ZodType, output } from "zod";
 
 import { normalizeLevel } from "#src/normalize/level.js";
 import { parseTimestampMs, toIso } from "#src/normalize/time.js";
@@ -13,6 +13,32 @@ function lenient<T extends ZodType>(schema: T) {
       const parsed = schema.safeParse(value);
       return parsed.success ? (parsed.data ?? undefined) : undefined;
     });
+}
+
+/** Array whose invalid entries are dropped one by one; non-array → `undefined`. */
+function lenientArray<T extends ZodType>(schema: T) {
+  return lenient(
+    array(unknown()).transform((list) =>
+      list.flatMap((entry): output<T>[] => {
+        const parsed = schema.safeParse(entry);
+        return parsed.success ? [parsed.data] : [];
+      }),
+    ),
+  );
+}
+
+/** Object whose invalid values are dropped key by key; non-object → `undefined`. */
+function lenientRecord<T extends ZodType>(schema: T) {
+  return lenient(
+    record(string(), unknown()).transform((input) =>
+      Object.fromEntries(
+        Object.entries(input).flatMap(([key, value]): [string, output<T>][] => {
+          const parsed = schema.safeParse(value);
+          return parsed.success ? [[key, parsed.data]] : [];
+        }),
+      ),
+    ),
+  );
 }
 
 /** Keys present (non-nullish) in `input` that were dropped by lenient parsing. */
@@ -39,6 +65,9 @@ function normalizeEventId(input: unknown): string | null {
 function truncate(text: string, max: number): string {
   if (text.length <= max) {
     return text;
+  }
+  if (max < 1) {
+    return "";
   }
   let end = Math.max(0, max - 1);
   const code = text.charCodeAt(end - 1);
@@ -114,7 +143,7 @@ const breadcrumbsSchema = union([
 
 function serializeQuery(input: string | Record<string, unknown> | unknown[]): string | null {
   if (typeof input === "string") {
-    return input;
+    return input === "" ? null : input;
   }
   const params = new URLSearchParams();
   const entries: unknown[] = Array.isArray(input) ? input : Object.entries(input);
@@ -173,7 +202,7 @@ const rawFrameSchema = looseObject({
 });
 
 const stacktraceSchema = looseObject({
-  frames: lenient(array(rawFrameSchema)),
+  frames: lenientArray(rawFrameSchema),
 });
 
 const mechanismSchema = looseObject({
@@ -227,9 +256,9 @@ const eventPayloadSchema = looseObject({
   culprit: lenient(string()),
   message: lenient(union([string(), logEntryMessageSchema])),
   logentry: lenient(logEntryMessageSchema),
-  exception: lenient(looseObject({ values: lenient(array(exceptionValueSchema)) })),
+  exception: lenient(looseObject({ values: lenientArray(exceptionValueSchema) })),
   stacktrace: lenient(stacktraceSchema),
-  threads: lenient(looseObject({ values: lenient(array(threadSchema)) })),
+  threads: lenient(looseObject({ values: lenientArray(threadSchema) })),
   fingerprint: lenient(array(string())),
 });
 
@@ -251,8 +280,8 @@ const measurementSchema = looseObject({
 const transactionPayloadSchema = looseObject({
   ...commonEventShape,
   start_timestamp: lenient(timestampSchema),
-  spans: lenient(array(transactionSpanSchema)),
-  measurements: lenient(record(string(), measurementSchema)),
+  spans: lenientArray(transactionSpanSchema),
+  measurements: lenientRecord(measurementSchema),
 });
 
 const spanContainerSchema = looseObject({ items: array(unknown()) });
@@ -282,6 +311,8 @@ const logEntrySchema = looseObject({
 });
 
 export {
+  lenientArray,
+  lenientRecord,
   lenient,
   collectDropped,
   normalizeEventId,

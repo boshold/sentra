@@ -120,6 +120,30 @@ describe("eventPayloadSchema", () => {
     expect(parsed.message).toEqual({ formatted: "hi" });
   });
 
+  it("drops invalid exception, thread and frame entries one by one", () => {
+    const parsed = eventPayloadSchema.parse({
+      exception: {
+        values: [
+          { type: "E", stacktrace: { frames: [{ filename: "a.js" }, null, 3, { lineno: 2 }] } },
+          null,
+          "junk",
+        ],
+      },
+      threads: { values: [null, { name: "main" }] },
+    });
+    expect(parsed.exception?.values).toHaveLength(1);
+    expect(
+      parsed.exception?.values?.[0]?.stacktrace?.frames?.map((frame) => frame.filename),
+    ).toEqual(["a.js", undefined]);
+    expect(parsed.threads?.values?.map((thread) => thread.name)).toEqual(["main"]);
+  });
+
+  it("drops a non-array exception.values", () => {
+    expect(
+      eventPayloadSchema.parse({ exception: { values: "x" } }).exception?.values,
+    ).toBeUndefined();
+  });
+
   it("drops a fingerprint with a non-string entry as a whole", () => {
     expect(eventPayloadSchema.parse({ fingerprint: ["a", 1] }).fingerprint).toBeUndefined();
     expect(eventPayloadSchema.parse({ fingerprint: ["a", "b"] }).fingerprint).toEqual(["a", "b"]);
@@ -142,6 +166,31 @@ describe("eventPayloadSchema", () => {
     const keys = ["start_timestamp", "timestamp", "spans", "contexts", "sdk", "transaction"];
     expect(collectDropped(payload, parsed, keys)).toEqual([]);
     expect(parsed.spans?.[0]?.op).toBe("test.child");
+  });
+});
+
+describe("transactionPayloadSchema", () => {
+  it("drops invalid spans and measurements one by one", () => {
+    const parsed = transactionPayloadSchema.parse({
+      spans: [{ span_id: "a" }, null, "junk", { span_id: "b" }],
+      measurements: {
+        fcp: { value: 1, unit: "millisecond" },
+        bad: 5,
+        nil: null,
+        lcp: { value: 2 },
+      },
+    });
+    expect(parsed.spans?.map((span) => span.span_id)).toEqual(["a", "b"]);
+    expect(parsed.measurements).toEqual({
+      fcp: { value: 1, unit: "millisecond" },
+      lcp: { value: 2, unit: undefined },
+    });
+  });
+
+  it("drops non-array spans and non-object measurements", () => {
+    const parsed = transactionPayloadSchema.parse({ spans: {}, measurements: [1] });
+    expect(parsed.spans).toBeUndefined();
+    expect(parsed.measurements).toBeUndefined();
   });
 });
 
@@ -238,6 +287,7 @@ describe("requestSchema", () => {
       ],
       "a=1&a=2",
     ],
+    ["", null],
     [42, null],
   ])("serializes query_string %j", (queryString, expected) => {
     expect(requestSchema.parse({ query_string: queryString }).query).toBe(expected);
@@ -304,5 +354,11 @@ describe("truncate", () => {
 
   it("does not split surrogate pairs", () => {
     expect(truncate("ab😀cd", 4)).toBe("ab…");
+    expect(truncate("abc😀d", 4)).toBe("abc…");
+    expect(truncate("a😀😀", 3)).toBe("a…");
+  });
+
+  it.each([[0], [-1]])("returns empty text for max %i", (max) => {
+    expect(truncate("abc", max)).toBe("");
   });
 });

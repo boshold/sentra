@@ -233,7 +233,7 @@ class SqliteStorage implements StorageAdapter {
 export interface SqliteStorageOptions {
   /** SQLite file path or `:memory:`. Missing parent directories are created. */
   path: string;
-  /** Default `"auto"`: `better-sqlite3`, then `node:sqlite`. */
+  /** Default `"auto"`: `better-sqlite3`, then `node:sqlite`; on Bun only `node:sqlite`. */
   driver?: SqliteDriverOption;
 }
 

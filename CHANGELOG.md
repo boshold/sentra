@@ -14,7 +14,7 @@ First release.
 - Typed records: `error`, `message`, `transaction`, `span`, `log`, `attachment`, `other`, including streamed spans and logs from Sentry JS SDK v11.
 - Issue grouping per `(project, session)` with in-app aware fingerprints and custom fingerprint support.
 - Source mapping at ingest: HTTP loader for Vite and Nuxt dev servers on loopback or allowed hosts, FS loader limited to source roots, `inApp` recomputation, unreliable SSR positions flagged.
-- Storage: `memoryStorage` and `sqliteStorage` (`better-sqlite3` with fallback to `node:sqlite`), plus the `StorageAdapter` interface for custom adapters.
+- Storage: `memoryStorage` and `sqliteStorage` (`better-sqlite3` with fallback to `node:sqlite` on Node, `node:sqlite` only on Bun), plus the `StorageAdapter` interface for custom adapters.
 - Query API (`listScopes`, `listIssues`, `getIssue`, `listItems`, `getItem`, `getItemByEventId`, `getBlob`, `getRawEnvelope`, `listFailedEnvelopes`) with exported zod filter schemas and cursor pagination.
 - Live updates with `subscribe(filter, listener)` (`item.created`, `envelope.failed`).
 - Retention: idle sessions after `30d`, spans, transactions, logs and other records after `7d`; both configurable or `never`. Exported default constants.

@@ -17,7 +17,10 @@ const CANDIDATES: Record<SqliteDriverName, Candidate> = {
   node: { label: "node:sqlite", open: openNodeSqlite },
 };
 
-const AUTO_ORDER: SqliteDriverName[] = ["better-sqlite3", "node"];
+/** Bun 1.4.0 aborts with an uncatchable NAPI panic when loading better-sqlite3. */
+function autoOrder(): SqliteDriverName[] {
+  return process.versions.bun === undefined ? ["better-sqlite3", "node"] : ["node"];
+}
 
 interface DriverLoadFailure {
   driver: string;
@@ -30,7 +33,7 @@ function firstLine(error: unknown): string {
 }
 
 export async function loadDriver(option: SqliteDriverOption, path: string): Promise<SqliteDriver> {
-  const names = option === "auto" ? AUTO_ORDER : [option];
+  const names = option === "auto" ? autoOrder() : [option];
   const failures: DriverLoadFailure[] = [];
   for (const name of names) {
     const candidate = CANDIDATES[name];

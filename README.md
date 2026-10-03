@@ -155,7 +155,7 @@ const issues = await sentra.query.listIssues({
 
 `mcpServer` is the host's own `McpServer` (SDK v1 `@modelcontextprotocol/sdk` or v2 `@modelcontextprotocol/server`). On shutdown call `unsubscribe()` and `await sentra.close()`. A host with its own router can use `isIngestPath(pathname)` to decide which requests go to `sentra.handle`.
 
-Hosts compiled with `bun build --compile` must pass `--external better-sqlite3`. Bun bundles the package's JavaScript but not its `.node` file, and the binary then fails at runtime with an absolute path from the build machine. With the package external the import fails cleanly and Sentra uses `node:sqlite` (built into Bun `>=1.4`).
+On Bun, `auto` uses only `node:sqlite` (built into Bun `>=1.4`) and never loads `better-sqlite3`: Bun 1.4.0 aborts the whole process when it loads that native addon, and the abort cannot be caught. `driver: "better-sqlite3"` still forces it. Hosts compiled with `bun build --compile` can pass `--external better-sqlite3` to keep the unused package out of the binary.
 
 Full API: [packages/core/README.md](packages/core/README.md).
 
@@ -224,7 +224,7 @@ Tools (all read-only): `sentra_list_scopes`, `sentra_list_issues`, `sentra_get_i
 ## Compatibility
 
 - Node `>=22.15`. On Node 22, `node:sqlite` is used only when `better-sqlite3` cannot load; Sentra filters its `ExperimentalWarning`.
-- Bun `>=1.4`.
+- Bun `>=1.4`, with `node:sqlite` as the SQLite driver.
 - Sentry JavaScript SDK v11 is tested in CI (`@sentry/node`, `@sentry/browser`). v8 to v10 and SDKs for other languages use the same protocol and are expected to work, but are not tested.
 - Linux and macOS. Windows is not tested.
 

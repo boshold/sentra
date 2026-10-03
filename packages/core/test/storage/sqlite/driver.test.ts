@@ -15,6 +15,8 @@ import { withWriteTransaction } from "#src/storage/sqlite/driver/transaction.js"
 import { BUSY_TIMEOUT_MS } from "#src/storage/sqlite/driver/types.js";
 import type { SqliteDriver, SqliteDriverName } from "#src/storage/sqlite/driver/types.js";
 
+import { RUNTIME_SQLITE_DRIVERS } from "../../helpers/sqlite.js";
+
 vi.mock("#src/storage/sqlite/driver/better-sqlite3.js", async (importOriginal) => {
   const actual =
     await importOriginal<typeof import("#src/storage/sqlite/driver/better-sqlite3.js")>();
@@ -41,7 +43,7 @@ async function canOpen(name: SqliteDriverName): Promise<boolean> {
 }
 
 const loadable: SqliteDriverName[] = [];
-for (const name of ["better-sqlite3", "node"] as const) {
+for (const name of RUNTIME_SQLITE_DRIVERS) {
   if (await canOpen(name)) {
     loadable.push(name);
   }
@@ -222,26 +224,61 @@ describe("loadDriver", () => {
     expect(vi.mocked(other)).not.toHaveBeenCalled();
   });
 
-  it("rejects with storage_unavailable listing every failure", async () => {
-    vi.mocked(openBetterSqlite3).mockRejectedValueOnce(
-      new Error("Cannot find module 'better-sqlite3'\nRequire stack: ..."),
-    );
-    vi.mocked(openNodeSqlite).mockRejectedValueOnce(
-      new Error("No such built-in module: node:sqlite"),
-    );
-    const result = loadDriver("auto", ":memory:");
-    await expect(result).rejects.toBeInstanceOf(SentraStorageError);
-    await expect(result).rejects.toMatchObject({
-      code: "storage_unavailable",
-      details: [
-        { driver: "better-sqlite3", message: "Cannot find module 'better-sqlite3'" },
-        { driver: "node:sqlite", message: "No such built-in module: node:sqlite" },
-      ],
+  describe("on Bun", () => {
+    const realBun = process.versions.bun;
+
+    beforeEach(() => {
+      Object.defineProperty(process.versions, "bun", { value: "1.4.0", configurable: true });
     });
-    await expect(result).rejects.toThrow(
-      /\nbetter-sqlite3: Cannot find module 'better-sqlite3'\nnode:sqlite: No such built-in module: node:sqlite$/,
-    );
+
+    afterEach(() => {
+      if (realBun === undefined) {
+        Reflect.deleteProperty(process.versions, "bun");
+      } else {
+        Object.defineProperty(process.versions, "bun", { value: realBun, configurable: true });
+      }
+    });
+
+    it("auto never tries better-sqlite3", async () => {
+      vi.mocked(openNodeSqlite).mockRejectedValueOnce(new Error("no node:sqlite"));
+      await expect(loadDriver("auto", ":memory:")).rejects.toMatchObject({
+        details: [{ driver: "node:sqlite", message: "no node:sqlite" }],
+      });
+      expect(vi.mocked(openBetterSqlite3)).not.toHaveBeenCalled();
+    });
+
+    it("forced better-sqlite3 is still tried", async () => {
+      vi.mocked(openBetterSqlite3).mockRejectedValueOnce(new Error("nope"));
+      await expect(loadDriver("better-sqlite3", ":memory:")).rejects.toBeInstanceOf(
+        SentraStorageError,
+      );
+      expect(vi.mocked(openBetterSqlite3)).toHaveBeenCalledTimes(1);
+    });
   });
+
+  it.skipIf(process.versions.bun !== undefined)(
+    "rejects with storage_unavailable listing every failure",
+    async () => {
+      vi.mocked(openBetterSqlite3).mockRejectedValueOnce(
+        new Error("Cannot find module 'better-sqlite3'\nRequire stack: ..."),
+      );
+      vi.mocked(openNodeSqlite).mockRejectedValueOnce(
+        new Error("No such built-in module: node:sqlite"),
+      );
+      const result = loadDriver("auto", ":memory:");
+      await expect(result).rejects.toBeInstanceOf(SentraStorageError);
+      await expect(result).rejects.toMatchObject({
+        code: "storage_unavailable",
+        details: [
+          { driver: "better-sqlite3", message: "Cannot find module 'better-sqlite3'" },
+          { driver: "node:sqlite", message: "No such built-in module: node:sqlite" },
+        ],
+      });
+      await expect(result).rejects.toThrow(
+        /\nbetter-sqlite3: Cannot find module 'better-sqlite3'\nnode:sqlite: No such built-in module: node:sqlite$/,
+      );
+    },
+  );
 });
 
 describe("suppressSqliteExperimentalWarning", () => {

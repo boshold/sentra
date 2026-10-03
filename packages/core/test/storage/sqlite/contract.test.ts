@@ -4,11 +4,11 @@ import path from "node:path";
 
 import { array, literal, string } from "zod";
 
-import { loadDriver } from "#src/storage/sqlite/driver/load.js";
 import type { SqliteDriverName } from "#src/storage/sqlite/driver/types.js";
 import { sqliteStorage } from "#src/storage/sqlite/index.js";
 
 import { runStorageContract } from "../../../../../test/storage-contract.js";
+import { loadableSqliteDrivers } from "../../helpers/sqlite.js";
 
 const DRIVERS: readonly SqliteDriverName[] = ["better-sqlite3", "node"];
 
@@ -22,21 +22,7 @@ const requiredSchema = string()
   )
   .pipe(array(literal(DRIVERS)));
 
-async function availableDrivers(): Promise<SqliteDriverName[]> {
-  const names: SqliteDriverName[] = [];
-  for (const name of DRIVERS) {
-    try {
-      const driver = await loadDriver(name, ":memory:");
-      driver.close();
-      names.push(name);
-    } catch {
-      // Not loadable in this runtime.
-    }
-  }
-  return names;
-}
-
-const available = await availableDrivers();
+const available = await loadableSqliteDrivers();
 const required = requiredSchema.parse(process.env.SENTRA_REQUIRE_SQLITE_DRIVERS);
 
 const tempDirs: string[] = [];
@@ -58,7 +44,7 @@ describe("sqlite driver availability", () => {
     expect(available).toContain(name);
   });
 
-  it("auto picks better-sqlite3 when it loads, else node", async () => {
+  it("auto picks better-sqlite3 when it loads (never on Bun), else node", async () => {
     const storage = sqliteStorage({ path: ":memory:", driver: "auto" });
     const info = await storage.init();
     await storage.close();

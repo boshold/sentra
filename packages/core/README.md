@@ -101,7 +101,7 @@ Durations are `<number><ms|s|m|h|d|w>`, for example `"60m"` or `"30d"`. The defa
 ## Storage
 
 - `memoryStorage({ maxItems })`: in-process storage. `maxItems` defaults to `10_000`; the oldest records are evicted first.
-- `sqliteStorage({ path, driver })`: SQLite file; missing directories are created. `driver` is `"auto"` (default), `"better-sqlite3"` or `"node"`. `auto` tries `better-sqlite3` first and falls back to `node:sqlite` (Node `>=22.13`, Bun `>=1.4`). On Node 22, `node:sqlite` prints an `ExperimentalWarning`; Sentra filters it. If no driver loads, `createSentra` throws `SentraStorageError` (`storage_unavailable`) listing each driver's error.
+- `sqliteStorage({ path, driver })`: SQLite file; missing directories are created. `driver` is `"auto"` (default), `"better-sqlite3"` or `"node"`. On Node, `auto` tries `better-sqlite3` first and falls back to `node:sqlite` (Node `>=22.13`); on Bun it uses `node:sqlite` only (see below). On Node 22, `node:sqlite` prints an `ExperimentalWarning`; Sentra filters it. If no driver loads, `createSentra` throws `SentraStorageError` (`storage_unavailable`) listing each driver's error.
 - Use one writer per database file: do not open the same file from two Sentra instances at the same time.
 - `sentra.info().storage` reports `{ type, driver, path }`, with `driver` set to `"better-sqlite3"` or `"node"` for SQLite.
 
@@ -109,7 +109,7 @@ The `StorageAdapter` interface and its types are exported for custom adapters.
 
 ## Bun-compiled hosts
 
-Hosts compiled with `bun build --compile` must pass `--external better-sqlite3`. Bun bundles the package's JavaScript but not its `.node` file, and the binary then fails at runtime with an absolute path from the build machine. With the package external the import fails cleanly and Sentra uses `node:sqlite` (built into Bun `>=1.4`).
+On Bun, `auto` uses only `node:sqlite` (built into Bun `>=1.4`) and never loads `better-sqlite3`: Bun 1.4.0 aborts the whole process when it loads that native addon, and the abort cannot be caught. `driver: "better-sqlite3"` still forces it. Hosts compiled with `bun build --compile` can pass `--external better-sqlite3` to keep the unused package out of the binary.
 
 ## DSN helpers
 

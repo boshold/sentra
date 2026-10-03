@@ -1,7 +1,7 @@
 import { TraceMap } from "@jridgewell/trace-mapping";
 
 import {
-  HTTP_FAILURE_TTL_MS,
+  FAILURE_TTL_MS,
   HTTP_UNVALIDATED_TTL_MS,
   SOURCE_MAP_CACHE_SIZE,
   cacheEntryFor,
@@ -17,6 +17,7 @@ const failed: CacheEntry = {
   source: { result: { status: "failed", reason: "no_source_map" }, traceMap: null },
   expiresAt: null,
   revalidate: null,
+  fs: null,
 };
 
 describe("createSourceMapCache", () => {
@@ -50,6 +51,7 @@ describe("createSourceMapCache", () => {
       },
       expiresAt: null,
       revalidate: null,
+      fs: null,
     });
     expect(cache.get("a")?.source.traceMap).toBe(traceMap);
     cache.delete("a");
@@ -120,20 +122,43 @@ describe("cacheEntryFor", () => {
   const httpLoaded = (http: HttpCacheInfo | undefined): CachedSource =>
     loaded({ status: "loaded", map, sourcesBase: "http://localhost/a.js", origin: "http", http });
 
-  it("never expires fs entries", () => {
-    expect(cacheEntryFor(httpLoaded(undefined), "fs", 1000)).toMatchObject({
+  it("never expires loaded fs entries and records roots and external map", () => {
+    const mapFile = { path: "/app/a.js.map", realPath: "/app/a.js.map", mtimeMs: 1, size: 2 };
+    const source = loaded({
+      status: "loaded",
+      map,
+      sourcesBase: "file:///app/a.js.map",
+      origin: "fs",
+      mapFile,
+    });
+    expect(cacheEntryFor(source, 1000, "roots")).toEqual({
+      source,
       expiresAt: null,
       revalidate: null,
+      fs: { rootsKey: "roots", mapFile },
+    });
+    const inline = loaded({ status: "loaded", map, sourcesBase: "file:///app/a.js", origin: "fs" });
+    expect(cacheEntryFor(inline, 1000, "roots").fs).toEqual({ rootsKey: "roots", mapFile: null });
+  });
+
+  it("expires fs failures after the failure TTL", () => {
+    const source = loaded({ status: "failed", reason: "map_outside_source_root" });
+    expect(cacheEntryFor(source, 1000, "roots")).toEqual({
+      source,
+      expiresAt: 6000,
+      revalidate: null,
+      fs: { rootsKey: "roots", mapFile: null },
     });
   });
 
   it("expires http failures after the failure TTL", () => {
-    expect(HTTP_FAILURE_TTL_MS).toBe(5000);
+    expect(FAILURE_TTL_MS).toBe(5000);
     const source = loaded({ status: "failed", reason: "no_source_map" });
-    expect(cacheEntryFor(source, "http", 1000)).toEqual({
+    expect(cacheEntryFor(source, 1000, null)).toEqual({
       source,
       expiresAt: 6000,
       revalidate: null,
+      fs: null,
     });
   });
 
@@ -142,7 +167,7 @@ describe("cacheEntryFor", () => {
     ["a module without validators", { module: null, mapUrl: null, map: null }],
   ])("expires http maps with %s after the unvalidated TTL", (_name, http) => {
     expect(HTTP_UNVALIDATED_TTL_MS).toBe(30_000);
-    expect(cacheEntryFor(httpLoaded(http), "http", 1000)).toMatchObject({
+    expect(cacheEntryFor(httpLoaded(http), 1000, null)).toMatchObject({
       expiresAt: 31_000,
       revalidate: null,
     });
@@ -150,12 +175,12 @@ describe("cacheEntryFor", () => {
 
   it("keeps validated http maps for revalidation", () => {
     const inline = { module, mapUrl: null, map: null };
-    expect(cacheEntryFor(httpLoaded(inline), "http", 1000)).toMatchObject({
+    expect(cacheEntryFor(httpLoaded(inline), 1000, null)).toMatchObject({
       expiresAt: null,
       revalidate: inline,
     });
     const external = { module, mapUrl: "http://localhost/a.js.map", map: module };
-    expect(cacheEntryFor(httpLoaded(external), "http", 1000)).toMatchObject({
+    expect(cacheEntryFor(httpLoaded(external), 1000, null)).toMatchObject({
       expiresAt: null,
       revalidate: external,
     });
@@ -163,7 +188,7 @@ describe("cacheEntryFor", () => {
 
   it("revalidates the module but expires an external map without validators", () => {
     const http = { module, mapUrl: "http://localhost/a.js.map", map: null };
-    expect(cacheEntryFor(httpLoaded(http), "http", 1000)).toMatchObject({
+    expect(cacheEntryFor(httpLoaded(http), 1000, null)).toMatchObject({
       expiresAt: 31_000,
       revalidate: http,
     });

@@ -9,9 +9,10 @@ import {
   httpCacheKey,
   isCacheable,
 } from "#src/sourcemaps/cache.js";
-import type { CacheEntry, CachedSource } from "#src/sourcemaps/cache.js";
+import type { CacheEntry, CachedSource, FsValidation } from "#src/sourcemaps/cache.js";
 import type { HttpCacheInfo, LoadResult } from "#src/sourcemaps/extract.js";
 import {
+  isMapFileUnchanged,
   loadFsSourceMap,
   readSourceInsideRoots,
   resolveInsideRoots,
@@ -59,6 +60,8 @@ interface ResolveContext {
   budget: Budget;
   deadline: AbortSignal;
   realRoots: string[];
+  /** Identifies `realRoots`; FS cache entries from other roots are stale. */
+  rootsKey: string;
   /** Locations admitted as candidates, in frame order; capped at `MAX_CANDIDATES`. */
   admitted: Set<string>;
   limit: Limiter;
@@ -136,6 +139,13 @@ function withoutNotModified(loaded: HttpLoadResult): LoadResult {
   return loaded.status === "not_modified" ? { status: "failed", reason: "fetch_failed" } : loaded;
 }
 
+async function isFsEntryValid(fs: FsValidation, ctx: ResolveContext): Promise<boolean> {
+  if (fs.rootsKey !== ctx.rootsKey) {
+    return false;
+  }
+  return fs.mapFile === null || isMapFileUnchanged(fs.mapFile, ctx.realRoots);
+}
+
 async function memo<T>(
   map: Map<string, Promise<T>>,
   key: string,
@@ -198,14 +208,17 @@ function createSourceMapResolver(options: SourceMapResolverOptions): SourceMapRe
     return null;
   }
 
-  /** The unexpired cache entry, if any. */
-  function cachedEntry(key: string): CacheEntry | null {
+  /** The unexpired, still valid cache entry, if any. */
+  async function cachedEntry(key: string, ctx: ResolveContext): Promise<CacheEntry | null> {
     const cached = cache.get(key);
     if (cached === undefined) {
       return null;
     }
-    if (cached.expiresAt !== null && now() >= cached.expiresAt) {
-      cache.delete(key);
+    const expired = cached.expiresAt !== null && now() >= cached.expiresAt;
+    if (expired || (cached.fs !== null && !(await isFsEntryValid(cached.fs, ctx)))) {
+      if (cache.get(key) === cached) {
+        cache.delete(key);
+      }
       return null;
     }
     return cached;
@@ -213,7 +226,7 @@ function createSourceMapResolver(options: SourceMapResolverOptions): SourceMapRe
 
   /** Loads, or revalidates a cached entry; a revalidation that changed something replaces it. */
   async function load(candidate: Candidate, ctx: ResolveContext): Promise<CachedSource> {
-    const cached = cachedEntry(candidate.key);
+    const cached = await cachedEntry(candidate.key, ctx);
     if (cached?.revalidate === null) {
       return cached.source;
     }
@@ -236,7 +249,8 @@ function createSourceMapResolver(options: SourceMapResolverOptions): SourceMapRe
     }
     const entry = await toCached(result);
     if (isCacheable(entry.result)) {
-      cache.set(candidate.key, cacheEntryFor(entry, candidate.origin, now()));
+      const fsRootsKey = candidate.origin === "fs" ? ctx.rootsKey : null;
+      cache.set(candidate.key, cacheEntryFor(entry, now(), fsRootsKey));
     }
     return entry;
   }
@@ -350,10 +364,12 @@ function createSourceMapResolver(options: SourceMapResolverOptions): SourceMapRe
   /** Returns mapped copies; inputs are never mutated. Rejects on unexpected errors. */
   async function mapEvents(events: EventData[]): Promise<EventData[]> {
     const budget = createBudget(options.budgetMs);
+    const realRoots = await resolveRoots([...roots]);
     const ctx: ResolveContext = {
       budget,
       deadline: AbortSignal.timeout(options.budgetMs),
-      realRoots: await resolveRoots([...roots]),
+      realRoots,
+      rootsKey: JSON.stringify(realRoots.toSorted()),
       admitted: new Set(),
       limit: createLimiter(MAX_CONCURRENT_LOADS),
       candidates: new Map(),

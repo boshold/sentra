@@ -10,7 +10,7 @@ import {
   parseSourceMap,
   resolveMapReference,
 } from "#src/sourcemaps/extract.js";
-import type { LoadResult } from "#src/sourcemaps/extract.js";
+import type { FsMapFile, LoadResult } from "#src/sourcemaps/extract.js";
 
 interface FsLoaderOptions {
   sourceRoots: readonly string[];
@@ -139,9 +139,29 @@ async function loadMapFile(
     return { status: "failed", reason: "map_outside_source_root" };
   }
   const json = await readResolved(mapFile, maxBytes);
-  return json === null
-    ? { status: "failed", reason: "too_large" }
-    : toLoaded(json, pathToFileURL(mapFile.realPath).href);
+  if (json === null) {
+    return { status: "failed", reason: "too_large" };
+  }
+  const loaded = toLoaded(json, pathToFileURL(mapFile.realPath).href);
+  return loaded.status === "loaded"
+    ? { ...loaded, mapFile: { ...mapFile, path: mapPath } }
+    : loaded;
+}
+
+/** True when `mapFile` still resolves (inside the roots) to the same file, unchanged. */
+async function isMapFileUnchanged(
+  mapFile: FsMapFile,
+  realRoots: readonly string[],
+): Promise<boolean> {
+  const current = await resolveInsideRoots(mapFile.path, realRoots);
+  return (
+    current !== null &&
+    current.realPath === mapFile.realPath &&
+    current.mtimeMs === mapFile.mtimeMs &&
+    current.size === mapFile.size &&
+    current.dev === mapFile.dev &&
+    current.ino === mapFile.ino
+  );
 }
 
 /** Loads the source map of a file returned by `resolveInsideRoots`. Never throws. */
@@ -197,6 +217,7 @@ async function readSourceInsideRoots(
 
 export {
   SSR_GUARD_EXTENSIONS,
+  isMapFileUnchanged,
   loadFsSourceMap,
   readSourceInsideRoots,
   resolveInsideRoots,

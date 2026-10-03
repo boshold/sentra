@@ -47,6 +47,16 @@ interface HttpCacheInfo {
   map: HttpValidators | null;
 }
 
+/** External map of an FS-loaded module: `path` as referenced, the rest from `stat` of its realpath. */
+interface FsMapFile {
+  path: string;
+  realPath: string;
+  mtimeMs: number;
+  size: number;
+  dev?: number;
+  ino?: number;
+}
+
 type LoadResult =
   | {
       status: "loaded";
@@ -54,6 +64,8 @@ type LoadResult =
       sourcesBase: string;
       origin: "http" | "fs";
       http?: HttpCacheInfo;
+      /** FS only: set for a sibling/external map, which a cached entry re-stats on use. */
+      mapFile?: FsMapFile;
     }
   | { status: "unreliable"; reason: string }
   | { status: "skipped"; reason: string }
@@ -214,4 +226,4 @@ export {
   rawSourceMapSchema,
   resolveMapReference,
 };
-export type { HttpCacheInfo, HttpValidators, LoadResult, MapReference, RawSourceMap };
+export type { FsMapFile, HttpCacheInfo, HttpValidators, LoadResult, MapReference, RawSourceMap };

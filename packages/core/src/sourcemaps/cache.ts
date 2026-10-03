@@ -1,6 +1,6 @@
 import type { TraceMap } from "@jridgewell/trace-mapping";
 
-import type { HttpCacheInfo, LoadResult } from "#src/sourcemaps/extract.js";
+import type { FsMapFile, HttpCacheInfo, LoadResult } from "#src/sourcemaps/extract.js";
 import { LruCache } from "#src/util/lru.js";
 
 /** `traceMap` is set when `result.status === "loaded"`. */
@@ -15,6 +15,13 @@ interface CacheEntry {
   expiresAt: number | null;
   /** Set for HTTP maps whose module sent `ETag` / `Last-Modified`: revalidated on every use. */
   revalidate: HttpCacheInfo | null;
+  /** Set for FS entries: valid only for the same source roots and an unchanged external map. */
+  fs: FsValidation | null;
+}
+
+interface FsValidation {
+  rootsKey: string;
+  mapFile: FsMapFile | null;
 }
 
 interface SourceMapCache {
@@ -27,7 +34,7 @@ interface SourceMapCache {
 
 const SOURCE_MAP_CACHE_SIZE = 200;
 /** Dev servers rebuild modules at the same URL, so HTTP entries are not trusted forever. */
-const HTTP_FAILURE_TTL_MS = 5000;
+const FAILURE_TTL_MS = 5000;
 const HTTP_UNVALIDATED_TTL_MS = 30_000;
 
 const DETERMINISTIC_FAILURES: ReadonlySet<string> = new Set([
@@ -63,26 +70,37 @@ function fsCacheKey(realPath: string, mtimeMs: number): string {
 }
 
 /**
- * FS keys already contain the mtime. HTTP entries are revalidated when the module sent
+ * FS keys contain the module's mtime; FS entries also record the source roots (`fsRootsKey`) and
+ * external map they were loaded with. HTTP entries are revalidated when the module sent
  * validators; an external map without validators (or a module without them) expires after 30 s.
+ * Failures of both expire after 5 s.
  */
-function cacheEntryFor(source: CachedSource, origin: "http" | "fs", now: number): CacheEntry {
-  if (origin === "fs") {
-    return { source, expiresAt: null, revalidate: null };
-  }
+function cacheEntryFor(source: CachedSource, now: number, fsRootsKey: string | null): CacheEntry {
   const { result } = source;
+  if (fsRootsKey !== null) {
+    return {
+      source,
+      expiresAt: result.status === "failed" ? now + FAILURE_TTL_MS : null,
+      revalidate: null,
+      fs: {
+        rootsKey: fsRootsKey,
+        mapFile: result.status === "loaded" ? (result.mapFile ?? null) : null,
+      },
+    };
+  }
   if (result.status === "failed") {
-    return { source, expiresAt: now + HTTP_FAILURE_TTL_MS, revalidate: null };
+    return { source, expiresAt: now + FAILURE_TTL_MS, revalidate: null, fs: null };
   }
   const http = result.status === "loaded" ? (result.http ?? null) : null;
   if (http === null || http.module === null) {
-    return { source, expiresAt: now + HTTP_UNVALIDATED_TTL_MS, revalidate: null };
+    return { source, expiresAt: now + HTTP_UNVALIDATED_TTL_MS, revalidate: null, fs: null };
   }
   const unvalidatedMap = http.mapUrl !== null && http.map === null;
   return {
     source,
     expiresAt: unvalidatedMap ? now + HTTP_UNVALIDATED_TTL_MS : null,
     revalidate: http,
+    fs: null,
   };
 }
 
@@ -94,7 +112,7 @@ function isCacheable(result: LoadResult): boolean {
 }
 
 export {
-  HTTP_FAILURE_TTL_MS,
+  FAILURE_TTL_MS,
   HTTP_UNVALIDATED_TTL_MS,
   SOURCE_MAP_CACHE_SIZE,
   cacheEntryFor,
@@ -103,4 +121,4 @@ export {
   httpCacheKey,
   isCacheable,
 };
-export type { CacheEntry, CachedSource, SourceMapCache };
+export type { CacheEntry, CachedSource, FsValidation, SourceMapCache };

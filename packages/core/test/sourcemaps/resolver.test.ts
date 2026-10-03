@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, realpath, rm, utimes, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import type { Server } from "node:http";
 import os from "node:os";
@@ -500,6 +500,80 @@ describe("resolveEvents", () => {
     const second = event([frame(file)]);
     await instance.resolveEvents([second]);
     expect(framesOf(second)[0]?.mapped).toMatchObject({ lineno: 2, contextLine: "line two" });
+  });
+
+  describe("fs cache revalidation", () => {
+    const sourceMap = (content: string) =>
+      JSON.stringify({
+        version: 3,
+        sources: ["orig.ts"],
+        sourcesContent: [content],
+        names: [],
+        mappings: "AAAA",
+      });
+
+    it("reloads when only the external map changes", async () => {
+      const file = await write("ext-map/app.js", "app();\n//# sourceMappingURL=app.js.map\n");
+      const mapPath = await write("ext-map/app.js.map", sourceMap("old source"));
+      await utimes(mapPath, 1_700_000_000, 1_700_000_000);
+      const instance = resolver();
+      const first = event([frame(file)]);
+      await instance.resolveEvents([first]);
+      expect(framesOf(first)[0]?.mapped).toMatchObject({ contextLine: "old source" });
+
+      await writeFile(mapPath, sourceMap("new source"));
+      await utimes(mapPath, 1_700_000_100, 1_700_000_100);
+      const second = event([frame(file)]);
+      await instance.resolveEvents([second]);
+      expect(framesOf(second)[0]?.mapped).toMatchObject({ contextLine: "new source" });
+    });
+
+    it("recovers a map outside the roots once its directory is added", async () => {
+      const mapDir = path.join(base, "maps-added");
+      await mkdir(mapDir, { recursive: true });
+      await writeFile(path.join(mapDir, "app.js.map"), sourceMap("mapped source"));
+      const file = await write(
+        "ext-root/app.js",
+        `app();\n//# sourceMappingURL=${pathToFileURL(path.join(mapDir, "app.js.map")).href}\n`,
+      );
+      const instance = resolver({ sourceRoots: [root] });
+      const first = event([frame(file)]);
+      await instance.resolveEvents([first]);
+      expect(first.sourceMaps.errors).toEqual([
+        { absPath: file, reason: "map_outside_source_root" },
+      ]);
+
+      instance.addSourceRoot(mapDir);
+      const second = event([frame(file)]);
+      await instance.resolveEvents([second]);
+      expect(second.sourceMaps).toMatchObject({ status: "full", mappedFrames: 1 });
+      expect(framesOf(second)[0]?.mapped).toMatchObject({ contextLine: "mapped source" });
+    });
+
+    it("expires fs failures after 5 s", async () => {
+      const outsideDir = path.join(base, "maps-outside");
+      await mkdir(outsideDir, { recursive: true });
+      await writeFile(path.join(outsideDir, "app.js.map"), sourceMap("outside"));
+      await write("ttl/real.js.map", sourceMap("inside"));
+      const link = path.join(root, "ttl/app.js.map");
+      await symlink(path.join(outsideDir, "app.js.map"), link);
+      const file = await write("ttl/app.js", "app();\n//# sourceMappingURL=app.js.map\n");
+      let clock = 0;
+      const instance = resolver({ now: () => clock });
+      const reasons = async (): Promise<string[]> => {
+        const data = event([frame(file)]);
+        await instance.resolveEvents([data]);
+        return data.sourceMaps.errors.map((error) => error.reason);
+      };
+      expect(await reasons()).toEqual(["map_outside_source_root"]);
+
+      await rm(link);
+      await symlink(path.join(root, "ttl/real.js.map"), link);
+      clock = 4999;
+      expect(await reasons()).toEqual(["map_outside_source_root"]);
+      clock = 5000;
+      expect(await reasons()).toEqual([]);
+    });
   });
 
   it("reads original sources from disk for fs maps", async () => {

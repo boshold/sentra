@@ -106,6 +106,29 @@ async function startRecorder(statusFor: (index: number) => number): Promise<Reco
 
 // --- scenarios (run in a child process each: Sentry.init is process-global) ---
 
+const HARDWARE_DEVICE_FIELDS = ["boot_time", "cpu_description", "memory_size", "free_memory"];
+
+/** Drops machine-specific details so fixtures do not describe the capture machine. */
+function scrubHardware<
+  T extends { contexts?: { app?: object; device?: object; culture?: object } },
+>(event: T): T {
+  const device = event.contexts?.device;
+  if (device !== undefined) {
+    for (const field of HARDWARE_DEVICE_FIELDS) {
+      Reflect.deleteProperty(device, field);
+    }
+  }
+  const app = event.contexts?.app;
+  if (app !== undefined) {
+    Reflect.deleteProperty(app, "free_memory");
+  }
+  const culture = event.contexts?.culture;
+  if (culture !== undefined) {
+    Reflect.set(culture, "timezone", "UTC");
+  }
+  return event;
+}
+
 async function loadNodeSdk() {
   return import("@sentry/node");
 }
@@ -118,7 +141,12 @@ async function withNode(
   body: (sentry: NodeSdk) => Promise<void> | void,
 ): Promise<void> {
   const Sentry = await loadNodeSdk();
-  Sentry.init({ serverName: SERVER_NAME, ...options });
+  Sentry.init({
+    serverName: SERVER_NAME,
+    beforeSend: scrubHardware,
+    beforeSendTransaction: scrubHardware,
+    ...options,
+  });
   await body(Sentry);
   await Sentry.flush(FLUSH_MS);
   await Sentry.close(FLUSH_MS);
@@ -146,6 +174,8 @@ async function withBrowser(
       // Happy-dom: the default fetch lookup fails with "The window is closed".
       transport: (transportOptions) =>
         Sentry.makeFetchTransport(transportOptions, async (...args) => globalThis.fetch(...args)),
+      beforeSend: scrubHardware,
+      beforeSendTransaction: scrubHardware,
       ...options(Sentry),
     });
     await body(Sentry);
@@ -424,10 +454,13 @@ function replaceAll(body: Buffer, search: string, replacement: string): Buffer {
   return Buffer.concat(parts);
 }
 
+// The host name is only replaced as a whole JSON string value or path segment:
+// A short host name could otherwise match inside unrelated text.
 const REPLACEMENTS: [string, string][] = [
   [ROOT, "/workspace/app"],
   [os.homedir(), "/home/dev"],
-  [os.hostname(), SERVER_NAME],
+  [JSON.stringify(os.hostname()), JSON.stringify(SERVER_NAME)],
+  [`/${os.hostname()}/`, `/${SERVER_NAME}/`],
 ];
 
 function sanitize(request: RecordedRequest): Buffer {

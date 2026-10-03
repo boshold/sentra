@@ -10,7 +10,7 @@
   "headers": {
     "content-encoding": "gzip"
   },
-  "bodyBytes": 2115,
+  "bodyBytes": 1974,
   "itemTypes": [
     "event"
   ]

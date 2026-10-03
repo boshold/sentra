@@ -1,6 +1,9 @@
 import os from "node:os";
 import { gunzipSync } from "node:zlib";
 
+import { array, boolean, looseObject, string } from "zod";
+import type { infer as Infer } from "zod";
+
 import { parseEnvelope } from "#src/parse/envelope.js";
 import type { ParsedEnvelope, ParsedItem } from "#src/parse/envelope.js";
 
@@ -36,21 +39,24 @@ function pathnameOf(fixture: EnvelopeFixture): string {
   return new URL(fixture.meta.path, "http://localhost").pathname;
 }
 
-interface ExceptionValue {
-  type?: string;
-  stacktrace?: { frames?: { in_app?: boolean }[] };
-}
+const exceptionPayloadSchema = looseObject({
+  exception: looseObject({
+    values: array(
+      looseObject({
+        type: string().optional(),
+        stacktrace: looseObject({
+          frames: array(looseObject({ in_app: boolean().optional() })).optional(),
+        }).optional(),
+      }),
+    ),
+  }),
+});
+
+type ExceptionValue = Infer<typeof exceptionPayloadSchema>["exception"]["values"][number];
 
 function exceptionValues(item: ParsedItem): ExceptionValue[] {
-  const payload = json(item);
-  if (typeof payload !== "object" || payload === null || !("exception" in payload)) {
-    return [];
-  }
-  const { exception } = payload;
-  if (typeof exception !== "object" || exception === null || !("values" in exception)) {
-    return [];
-  }
-  return Array.isArray(exception.values) ? exception.values : [];
+  const result = exceptionPayloadSchema.safeParse(json(item));
+  return result.success ? result.data.exception.values : [];
 }
 
 function hasField(item: ParsedItem, field: string): boolean {

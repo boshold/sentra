@@ -266,9 +266,8 @@ describe("loadHttpSourceMap", () => {
   });
 
   it("reports a refused connection as fetch_failed", async () => {
-    const closed = await startServer(() => undefined);
-    await stopServer(closed);
-    const result = await loadHttpSourceMap(new URL(`${closed.origin}/a.js`), options());
+    // Port 1 (tcpmux) is privileged and not listening on dev machines or CI.
+    const result = await loadHttpSourceMap(new URL("http://127.0.0.1:1/a.js"), options());
     expect(result).toEqual({ status: "failed", reason: "fetch_failed" });
   });
 });
@@ -288,6 +287,24 @@ describe("isAllowedUrl", () => {
     ["http://192.168.1.10/a", false],
   ])("%s → %s", (url, expected) => {
     expect(isAllowedUrl(new URL(url), defaults)).toBe(expected);
+  });
+
+  it.each<[string]>([
+    ["http://dev.local"],
+    ["dev.local/path"],
+    ["user@dev.local"],
+    ["dev local"],
+    [""],
+  ])("ignores invalid host entry %j", (entry) => {
+    expect([...normalizeAllowedHosts([entry])].toSorted()).toEqual(
+      [...DEFAULT_ALLOWED_HOSTS].toSorted(),
+    );
+  });
+
+  it("does not allow the scheme of a URL-like entry as hostname", () => {
+    expect(
+      isAllowedUrl(new URL("http://http/a"), normalizeAllowedHosts(["http://dev.local"])),
+    ).toBe(false);
   });
 
   it("accepts extra hosts", () => {

@@ -22,27 +22,21 @@ const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const MAX_REDIRECTS = 3;
 const JAVASCRIPT_CONTENT_TYPE = /^(?:text|application)\/(?:x-)?(?:javascript|ecmascript)\b/i;
 
+/** Accepts `host`, `host:port`, `[v6]`, `[v6]:port` and bare IPv6; rejects anything URL-like. */
 function addHost(hosts: Set<string>, entry: string): void {
-  const value = entry.trim().toLowerCase();
-  if (value === "") {
+  const value = entry.trim();
+  if (value === "" || /[/\\@?#\s]/.test(value)) {
     return;
   }
-  if (value.startsWith("[")) {
-    const end = value.indexOf("]");
-    if (end === -1) {
-      return;
-    }
-    hosts.add(value.slice(0, end + 1));
-    hosts.add(value.slice(1, end));
+  const isBareIpv6 = !value.startsWith("[") && value.split(":").length > 2;
+  const hostname = URL.parse(`http://${isBareIpv6 ? `[${value}]` : value}`)?.hostname;
+  if (hostname === undefined || hostname === "") {
     return;
   }
-  const colons = value.split(":").length - 1;
-  if (colons > 1) {
-    hosts.add(value);
-    hosts.add(`[${value}]`);
-    return;
+  hosts.add(hostname);
+  if (hostname.startsWith("[")) {
+    hosts.add(hostname.slice(1, -1));
   }
-  hosts.add(colons === 1 ? value.slice(0, value.indexOf(":")) : value);
 }
 
 function normalizeAllowedHosts(extra: readonly string[]): Set<string> {
@@ -77,39 +71,79 @@ async function cancelBody(response: Response): Promise<void> {
   }
 }
 
-async function readLimited(response: Response, maxBytes: number): Promise<Uint8Array | null> {
+async function collect(
+  body: ReadableStream<Uint8Array>,
+  maxBytes: number,
+): Promise<Uint8Array[] | null> {
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  // Leaving the loop early cancels the stream.
+  for await (const chunk of body) {
+    total += chunk.byteLength;
+    if (total > maxBytes) {
+      return null;
+    }
+    chunks.push(chunk);
+  }
+  return chunks;
+}
+
+async function readLimited(response: Response, maxBytes: number): Promise<string | null> {
   const contentLength = Number(response.headers.get("content-length") ?? Number.NaN);
   if (Number.isFinite(contentLength) && contentLength > maxBytes) {
     await cancelBody(response);
     return null;
   }
   if (response.body === null) {
-    return new Uint8Array(0);
+    return "";
   }
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for (;;) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential stream reads
-    const { done, value } = await reader.read();
-    if (done) {
-      break;
+  const chunks = await collect(response.body, maxBytes);
+  if (chunks === null) {
+    return null;
+  }
+  const decoder = new TextDecoder();
+  return chunks.map((chunk) => decoder.decode(chunk, { stream: true })).join("") + decoder.decode();
+}
+
+interface FetchContext {
+  options: HttpLoaderOptions;
+  signal: AbortSignal;
+  expectJavaScript: boolean;
+}
+
+async function fetchHop(current: URL, hop: number, context: FetchContext): Promise<FetchResult> {
+  const { options, signal, expectJavaScript } = context;
+  const response = await fetch(current, {
+    redirect: "manual",
+    signal,
+    credentials: "omit",
+    headers: { accept: "*/*" },
+  });
+  if (REDIRECT_STATUSES.has(response.status)) {
+    await cancelBody(response);
+    const location = response.headers.get("location");
+    const next = location === null || hop >= MAX_REDIRECTS ? null : URL.parse(location, current);
+    if (next === null || next.host !== current.host || !isAllowedUrl(next, options.allowedHosts)) {
+      return { ok: false, reason: "redirect_not_allowed" };
     }
-    total += value.byteLength;
-    if (total > maxBytes) {
-      // oxlint-disable-next-line no-await-in-loop -- abort once, then return
-      await reader.cancel();
-      return null;
-    }
-    chunks.push(value);
+    return fetchHop(next, hop + 1, context);
   }
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
+  if (response.status !== 200) {
+    await cancelBody(response);
+    return { ok: false, reason: `http_status_${response.status}` };
   }
-  return bytes;
+  if (
+    expectJavaScript &&
+    !JAVASCRIPT_CONTENT_TYPE.test(response.headers.get("content-type") ?? "")
+  ) {
+    await cancelBody(response);
+    return { ok: false, reason: "not_javascript" };
+  }
+  const text = await readLimited(response, options.maxBytes ?? MAX_SOURCE_BYTES);
+  if (text === null) {
+    return { ok: false, reason: "too_large" };
+  }
+  return { ok: true, text, finalUrl: current, headers: response.headers };
 }
 
 async function fetchLimited(
@@ -118,58 +152,8 @@ async function fetchLimited(
   expectJavaScript: boolean,
 ): Promise<FetchResult> {
   const signal = AbortSignal.timeout(options.timeoutMs);
-  const maxBytes = options.maxBytes ?? MAX_SOURCE_BYTES;
-  let current = url;
   try {
-    for (let hop = 0; ; hop += 1) {
-      // oxlint-disable-next-line no-await-in-loop -- redirects are followed one by one
-      const response = await fetch(current, {
-        redirect: "manual",
-        signal,
-        credentials: "omit",
-        headers: { accept: "*/*" },
-      });
-      if (REDIRECT_STATUSES.has(response.status)) {
-        // oxlint-disable-next-line no-await-in-loop -- redirect body is discarded
-        await cancelBody(response);
-        const location = response.headers.get("location");
-        const next =
-          location === null || hop >= MAX_REDIRECTS ? null : URL.parse(location, current);
-        if (
-          next === null ||
-          next.host !== current.host ||
-          !isAllowedUrl(next, options.allowedHosts)
-        ) {
-          return { ok: false, reason: "redirect_not_allowed" };
-        }
-        current = next;
-        continue;
-      }
-      if (response.status !== 200) {
-        // oxlint-disable-next-line no-await-in-loop -- terminal branch
-        await cancelBody(response);
-        return { ok: false, reason: `http_status_${response.status}` };
-      }
-      if (
-        expectJavaScript &&
-        !JAVASCRIPT_CONTENT_TYPE.test(response.headers.get("content-type") ?? "")
-      ) {
-        // oxlint-disable-next-line no-await-in-loop -- terminal branch
-        await cancelBody(response);
-        return { ok: false, reason: "not_javascript" };
-      }
-      // oxlint-disable-next-line no-await-in-loop -- terminal branch
-      const bytes = await readLimited(response, maxBytes);
-      if (bytes === null) {
-        return { ok: false, reason: "too_large" };
-      }
-      return {
-        ok: true,
-        text: new TextDecoder().decode(bytes),
-        finalUrl: current,
-        headers: response.headers,
-      };
-    }
+    return await fetchHop(url, 0, { options, signal, expectJavaScript });
   } catch (error) {
     return { ok: false, reason: isTimeout(error, signal) ? "timeout" : "fetch_failed" };
   }

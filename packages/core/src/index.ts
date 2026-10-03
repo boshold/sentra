@@ -28,6 +28,17 @@ export {
   scopeTimeFilterSchema,
   timeFilterSchema,
 } from "#src/query/filters.js";
+export { formatFrameLocation, renderFrameLines, renderStackMarkdown } from "#src/render/frames.js";
+export { renderIssueDetail, renderIssueLine } from "#src/render/issue.js";
+export {
+  formatAttributes,
+  formatDuration,
+  formatRelativeTime,
+  formatScope,
+  renderItemDetail,
+  renderItemLine,
+  renderScopeTable,
+} from "#src/render/item.js";
 export { createSentra } from "#src/sentra.js";
 export type { Sentra, SentraBlob, SentraInfo, SentraQuery } from "#src/sentra.js";
 export { memoryStorage } from "#src/storage/memory/index.js";

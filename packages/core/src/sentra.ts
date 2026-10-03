@@ -1,5 +1,3 @@
-import path from "node:path";
-
 import { buildDsn } from "#src/dsn.js";
 import { SentraConfigError } from "#src/errors.js";
 import { createIngestHandler } from "#src/ingest/handler.js";
@@ -18,7 +16,7 @@ import {
   resolveScopeTimeFilter,
 } from "#src/query/filters.js";
 import { createRetention } from "#src/retention.js";
-import { createSourceMapResolver } from "#src/sourcemaps/resolver.js";
+import { absoluteDir, createSourceMapResolver } from "#src/sourcemaps/resolver.js";
 import type {
   Envelope,
   Issue,
@@ -94,13 +92,6 @@ interface SentraInternals {
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function absoluteDir(dir: string): string {
-  if (!path.isAbsolute(dir)) {
-    throw new SentraConfigError("invalid_option", `source root must be absolute: ${dir}`);
-  }
-  return path.resolve(dir);
 }
 
 async function blobOf(options: ResolvedOptions, item: Item | null): Promise<SentraBlob | null> {

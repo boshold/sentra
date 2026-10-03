@@ -72,6 +72,7 @@ const NOT_APPLICABLE: SourceMapInfo = {
   errors: [],
 };
 
+/** Validates and normalizes a source root; shared with `Sentra.addSourceRoot`. */
 function absoluteDir(dir: string): string {
   if (!path.isAbsolute(dir)) {
     throw new SentraConfigError("invalid_option", `source root must be absolute: ${dir}`);
@@ -177,7 +178,13 @@ function createSourceMapResolver(options: SourceMapResolverOptions): SourceMapRe
     if (ctx.budget.exceeded()) {
       return { result: { status: "failed", reason: "budget_exceeded" }, traceMap: null };
     }
-    const entry = await toCached(await candidate.load());
+    const loaded = await candidate.load();
+    // A fetch aborted by the shared per-envelope deadline ran out of budget, not of fetch time.
+    const result: LoadResult =
+      loaded.status === "failed" && loaded.reason === "timeout" && ctx.deadline.aborted
+        ? { status: "failed", reason: "budget_exceeded" }
+        : loaded;
+    const entry = await toCached(result);
     if (isCacheable(entry.result)) {
       cache.set(candidate.key, entry);
     }
@@ -232,17 +239,22 @@ function createSourceMapResolver(options: SourceMapResolverOptions): SourceMapRe
   }
 
   async function resolveEvent(event: EventData, ctx: ResolveContext): Promise<EventData> {
+    const resolveAll = async (frames: Frame[]): Promise<FrameOutcome[]> =>
+      Promise.all(frames.map(async (frame) => resolveFrame(frame, ctx)));
+    const [exceptionOutcomes, stacktraceOutcomes] = await Promise.all([
+      Promise.all(event.exceptions.map(async (exception) => resolveAll(exception.frames))),
+      resolveAll(event.stacktrace),
+    ]);
+
+    // Built sequentially in frame order so counters and errors are deterministic.
     const errors: SourceMapInfo["errors"] = [];
     const seen = new Set<string>();
     let candidateFrames = 0;
     let mappedFrames = 0;
-
-    async function patch(frames: Frame[]): Promise<Frame[]> {
-      const outcomes = await Promise.all(
-        frames.map(async (frame) => ({ frame, outcome: await resolveFrame(frame, ctx) })),
-      );
-      return outcomes.map(({ frame, outcome }) => {
-        if (outcome.kind === "none") {
+    const apply = (frames: Frame[], outcomes: FrameOutcome[]): Frame[] =>
+      frames.map((frame, index) => {
+        const outcome = outcomes[index];
+        if (outcome === undefined || outcome.kind === "none") {
           return frame;
         }
         candidateFrames += 1;
@@ -258,15 +270,12 @@ function createSourceMapResolver(options: SourceMapResolverOptions): SourceMapRe
         }
         return outcome.frame;
       });
-    }
 
-    const exceptions = await Promise.all(
-      event.exceptions.map(async (exception) => ({
-        ...exception,
-        frames: await patch(exception.frames),
-      })),
-    );
-    const stacktrace = await patch(event.stacktrace);
+    const exceptions = event.exceptions.map((exception, index) => ({
+      ...exception,
+      frames: apply(exception.frames, exceptionOutcomes[index] ?? []),
+    }));
+    const stacktrace = apply(event.stacktrace, stacktraceOutcomes);
     const sourceMaps: SourceMapInfo =
       candidateFrames === 0
         ? { ...NOT_APPLICABLE, errors: [] }
@@ -343,5 +352,5 @@ function createSourceMapResolver(options: SourceMapResolverOptions): SourceMapRe
   };
 }
 
-export { createSourceMapResolver };
+export { absoluteDir, createSourceMapResolver };
 export type { SourceMapResolver, SourceMapResolverOptions };

@@ -344,7 +344,7 @@ describe("resolveEvents", () => {
     expect(performance.now() - start).toBeLessThan(600);
     expect(data.sourceMaps.mappedFrames).toBe(0);
     for (const error of data.sourceMaps.errors) {
-      expect(["timeout", "budget_exceeded"]).toContain(error.reason);
+      expect(error.reason).toBe("budget_exceeded");
     }
     expect(data.sourceMaps.errors).toHaveLength(2);
   });
@@ -354,7 +354,37 @@ describe("resolveEvents", () => {
     const start = performance.now();
     await resolver({ fetchTimeoutMs: 5000, budgetMs: 100 }).resolveEvents([data]);
     expect(performance.now() - start).toBeLessThan(300);
-    expect(data.sourceMaps.errors).toEqual([{ absPath: `${origin}/slow-3.js`, reason: "timeout" }]);
+    expect(data.sourceMaps.errors).toEqual([
+      { absPath: `${origin}/slow-3.js`, reason: "budget_exceeded" },
+    ]);
+  });
+
+  it("reports timeout when the fetch timeout fires before the budget", async () => {
+    const data = event([frame(`${origin}/slow-5.js`)]);
+    await resolver({ fetchTimeoutMs: 50, budgetMs: 3000 }).resolveEvents([data]);
+    expect(data.sourceMaps.errors).toEqual([{ absPath: `${origin}/slow-5.js`, reason: "timeout" }]);
+  });
+
+  it("orders errors by frame position across exceptions and stacktrace", async () => {
+    const data = event(
+      [frame(`${origin}/slow-6.js`), frame(`${origin}/spa.vue`)],
+      [frame(`${origin}/nope.js`)],
+    );
+    data.exceptions.unshift({
+      type: "Error",
+      value: "cause",
+      module: null,
+      mechanism: null,
+      frames: [frame(`${origin}/missing.js`)],
+    });
+    await resolver({ fetchTimeoutMs: 100 }).resolveEvents([data]);
+    expect(data.sourceMaps.errors.map((error) => error.reason)).toEqual([
+      "http_status_404",
+      "timeout",
+      "not_javascript",
+      "http_status_404",
+    ]);
+    expect(data.sourceMaps.candidateFrames).toBe(4);
   });
 
   it("does not cache transient failures", async () => {
@@ -394,11 +424,9 @@ describe("source roots", () => {
     expect(unmapped.sourceMaps.status).toBe("not_applicable");
 
     expect(() => instance.addSourceRoot("relative/dir")).toThrow(SentraConfigError);
-    try {
-      instance.addSourceRoot("relative/dir");
-    } catch (error) {
-      expect(error).toMatchObject({ code: "invalid_option" });
-    }
+    expect(() => instance.addSourceRoot("relative/dir")).toThrow(
+      expect.objectContaining({ code: "invalid_option" }),
+    );
   });
 
   it("shares a passed Set with its owner", () => {

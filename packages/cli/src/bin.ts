@@ -13,7 +13,7 @@ for (const signal of SIGNALS) {
 
 const { runCli } = await import("#src/cli.js");
 const result = runCli(process.argv.slice(2));
-// After `runCli` added the server's handlers: removing the last listener drops a pending signal.
+// Removed only after runCli registered its own handlers, so a signal never falls back to the default exit.
 for (const signal of SIGNALS) {
   process.off(signal, exitEarly);
 }

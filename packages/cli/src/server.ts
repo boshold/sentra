@@ -137,14 +137,13 @@ function subscribeLive(
         : formatLiveEvent(event, { color: config.color, stream: stdout });
     stdout.write(`${lines.join("\n")}\n`);
   });
-  // Stays registered after stop() so later errors on a broken pipe are not unhandled.
   function stop(): void {
     if (active) {
       active = false;
       unsubscribe();
     }
   }
-  // A closed pipe (EPIPE, e.g. `| head -1`) ends live output; the server keeps running.
+  // A closed pipe (e.g. `| head -1`) ends live output; the listener stays so later pipe errors are not unhandled.
   stdout.on("error", stop);
   return stop;
 }
@@ -234,7 +233,7 @@ function exitProcess(code: number): void {
   process.exit(code);
 }
 
-/** Closes a server whose startup outlived the signal; startup errors no longer matter then. */
+/** Closes a server that finished starting after the exit signal; startup errors are ignored. */
 async function closeWhenStarted(startup: Promise<RunningServer>): Promise<void> {
   try {
     const server = await startup;

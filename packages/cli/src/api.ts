@@ -79,7 +79,7 @@ function splitList(values: string[]): string[] {
     .filter((value) => value !== "");
 }
 
-/** Core ignores these (`nonEmpty`, dash-stripped `eventId`); dropping them keeps `filter_required` honest. */
+/** Core ignores blank values and dash-only `eventId`; dropping them keeps an empty filter from passing `filter_required`. */
 function isEmptyScalar(key: string, value: string): boolean {
   const trimmed = value.trim();
   return trimmed === "" || (key === "eventId" && trimmed.replaceAll("-", "") === "");

@@ -1,23 +1,20 @@
 packages:
   - "packages/*"
 
-# Supply-chain hardening — settings reference: https://pnpm.io/settings
+# Supply-chain hardening, see https://pnpm.io/settings
 
-# Refuse versions published <3 days ago (direct + transitive); fails the install
-# when a range has no old-enough version. Malicious npm releases are typically
-# detected and yanked within hours.
+# Refuse versions younger than 3 days, including transitive ones; malicious releases are usually yanked within hours.
 minimumReleaseAge: 4320 # minutes (3 days)
 minimumReleaseAgeStrict: true
 
-# Fail install if a package's provenance/trusted-publisher evidence weakens
-# vs an earlier release (stolen-token republish pattern).
+# Fail if provenance weakens vs an earlier release (stolen-token republish).
 trustPolicy: no-downgrade
-trustPolicyIgnoreAfter: 4320 # only check versions published in the last 3 days (pre-provenance packages would false-positive)
+trustPolicyIgnoreAfter: 4320 # skip versions older than 3 days (pre-provenance releases would fail)
 
-# Transitive deps must come from registries — no git/tarball sources smuggled in by subdeps.
+# Transitive deps must come from a registry, not git or tarball URLs.
 blockExoticSubdeps: true
 
-# Build-script allowlist — any package not listed that tries to run install scripts is a hard error.
+# Only these packages may run install scripts; others fail the install.
 allowBuilds:
   esbuild: true # downloads platform binary
 

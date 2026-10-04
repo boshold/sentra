@@ -9,7 +9,6 @@ import type { NodeListener } from "#src/router.js";
 
 interface McpRoute {
   listener: NodeListener;
-  /** Closes the SDK handler. */
   close(): Promise<void>;
 }
 

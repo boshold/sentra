@@ -110,8 +110,11 @@ const HARDWARE_DEVICE_FIELDS = ["boot_time", "cpu_description", "memory_size", "
 
 /** Drops machine-specific details so fixtures do not describe the capture machine. */
 function scrubHardware<
-  T extends { contexts?: { app?: object; device?: object; culture?: object } },
+  T extends { contexts?: { app?: object; device?: object; culture?: object; os?: object } },
 >(event: T): T {
+  if (event.contexts?.os !== undefined) {
+    Reflect.set(event.contexts, "os", { name: "Linux" });
+  }
   const device = event.contexts?.device;
   if (device !== undefined) {
     for (const field of HARDWARE_DEVICE_FIELDS) {
@@ -475,8 +478,7 @@ function replaceAll(body: Buffer, search: string, replacement: string): Buffer {
   return Buffer.concat(parts);
 }
 
-// The host name is only replaced as a whole JSON string value or path segment:
-// A short host name could otherwise match inside unrelated text.
+// The host name is replaced only as a whole JSON string or path segment; a short name could match unrelated text.
 const REPLACEMENTS: [string, string][] = [
   [ROOT, "/workspace/app"],
   [os.homedir(), "/home/dev"],

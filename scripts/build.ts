@@ -31,7 +31,7 @@ const TARGETS: Target[] = [
   },
 ];
 
-/** Version for `sentra --version`: core package.json → "dev". */
+/** Version for `sentra --version`: core's package.json version, else "dev". */
 function resolveVersion(): string {
   const parsed: unknown = JSON.parse(
     readFileSync(path.join(ROOT, "packages/core/package.json"), "utf8"),

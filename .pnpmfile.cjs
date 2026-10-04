@@ -1,4 +1,4 @@
-// Dev-only manifest fields; `src/` is not shipped, so `imports` would point nowhere.
+// Strips dev-only fields before packing: `scripts`, and `imports` (points at the unshipped `src/`).
 const PACKED = new Set(["@bosdev/sentra-core", "@bosdev/sentra-cli"]);
 
 function beforePacking(pkg) {

@@ -1,7 +1,5 @@
-# Update-PR cadence only — install-time supply-chain enforcement lives in
-# pnpm-workspace.yaml (minimumReleaseAge / trustPolicy). Keep cooldowns here
-# aligned with pnpm's minimumReleaseAge (3 days) so Dependabot never proposes
-# a version pnpm then refuses to install.
+# Update cadence only; install-time checks live in pnpm-workspace.yaml.
+# Cooldowns match pnpm's minimumReleaseAge (3 days) so proposed versions can install.
 version: 2
 
 updates:
@@ -15,7 +13,7 @@ updates:
       semver-major-days: 3
       semver-minor-days: 3
       semver-patch-days: 3
-    # First matching group wins — named groups before the catch-alls.
+    # First matching group wins, so named groups come before the catch-alls.
     groups:
       oxc:
         patterns:

@@ -72,7 +72,6 @@ function routePathname(req: IncomingMessage): string {
   return URL.parse(req.url ?? "/", "http://x")?.pathname ?? "/";
 }
 
-/** Normalized query parameters of the request. */
 function routeSearchParams(req: IncomingMessage): URLSearchParams {
   return URL.parse(req.url ?? "/", "http://x")?.searchParams ?? new URLSearchParams();
 }

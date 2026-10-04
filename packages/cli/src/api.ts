@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-import { SentraValidationError } from "@boshold/sentra-core";
-import type { Item, Sentra, SentraLogger } from "@boshold/sentra-core";
+import { SentraValidationError } from "@bosdev/sentra-core";
+import type { Item, Sentra, SentraLogger } from "@bosdev/sentra-core";
 
 import { routePathname, routeSearchParams, sendError, sendJson } from "#src/router.js";
 import type { NodeListener } from "#src/router.js";

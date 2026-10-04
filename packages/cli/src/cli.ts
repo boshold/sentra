@@ -6,7 +6,7 @@ import {
   DEFAULT_NOISE_MAX_AGE,
   VERSION,
   buildDsn,
-} from "@boshold/sentra-core";
+} from "@bosdev/sentra-core";
 import { cli, command } from "cleye";
 import type { Flags, Renderers } from "cleye";
 

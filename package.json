@@ -21,7 +21,7 @@
     "smoke:bun": "tsx scripts/bun-compile-smoke.ts"
   },
   "devDependencies": {
-    "@boshold/sentra-core": "workspace:*",
+    "@bosdev/sentra-core": "workspace:*",
     "@happy-dom/global-registrator": "^20.14.5",
     "@sentry/browser": "^11.1.0",
     "@sentry/node": "^11.1.0",

@@ -2,7 +2,7 @@
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "paths": {
-      "@boshold/sentra-core": ["./packages/core/src/index.ts"]
+      "@bosdev/sentra-core": ["./packages/core/src/index.ts"]
     }
   },
   "include": ["scripts", "test", "vitest.config.ts"],

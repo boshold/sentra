@@ -1,5 +1,5 @@
 // Host for `scripts/bun-compile-smoke.ts`: compiled with `bun build --compile --external better-sqlite3`.
-import { createSentra, sqliteStorage } from "@boshold/sentra-core";
+import { createSentra, sqliteStorage } from "@bosdev/sentra-core";
 
 const dbPath = process.argv.at(2);
 if (dbPath === undefined) {

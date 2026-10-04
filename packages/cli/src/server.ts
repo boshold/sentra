@@ -2,8 +2,8 @@ import { createServer } from "node:http";
 import type { Server } from "node:http";
 import { homedir } from "node:os";
 
-import { SentraConfigError, createSentra, toNodeListener } from "@boshold/sentra-core";
-import type { Sentra, SentraLogger } from "@boshold/sentra-core";
+import { SentraConfigError, createSentra, toNodeListener } from "@bosdev/sentra-core";
+import type { Sentra, SentraLogger } from "@bosdev/sentra-core";
 
 import { createApiHandler } from "#src/api.js";
 import { renderBanner } from "#src/banner.js";

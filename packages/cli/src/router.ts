@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-import type { SentraLogger } from "@boshold/sentra-core";
+import type { SentraLogger } from "@bosdev/sentra-core";
 
 import type { Guard } from "#src/guard.js";
 

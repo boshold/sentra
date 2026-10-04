@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-import { toNodeListener } from "@boshold/sentra-core";
-import type { Sentra, SentraLogger } from "@boshold/sentra-core";
+import { toNodeListener } from "@bosdev/sentra-core";
+import type { Sentra, SentraLogger } from "@bosdev/sentra-core";
 import { McpServer, createMcpHandler } from "@modelcontextprotocol/server";
 
 import { sendJson } from "#src/router.js";

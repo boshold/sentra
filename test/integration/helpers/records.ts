@@ -1,4 +1,4 @@
-import type { Item, ItemFilter, ItemSummary, Sentra } from "@boshold/sentra-core";
+import type { Item, ItemFilter, ItemSummary, Sentra } from "@bosdev/sentra-core";
 
 import { runScenario } from "./scenario.js";
 import type { RecordedRequest } from "./server.js";

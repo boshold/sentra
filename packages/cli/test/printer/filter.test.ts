@@ -1,4 +1,4 @@
-import type { LiveEvent } from "@boshold/sentra-core";
+import type { LiveEvent } from "@bosdev/sentra-core";
 
 import { createLiveFilter } from "#src/printer/filter.js";
 import type { LiveFilterOptions } from "#src/printer/filter.js";

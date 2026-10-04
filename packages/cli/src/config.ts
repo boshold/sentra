@@ -17,8 +17,8 @@ import {
   parseAllowedHost,
   parseSize,
   sqliteStorage,
-} from "@boshold/sentra-core";
-import type { Duration, ItemKind, Level, SentraLogger, SentraOptions } from "@boshold/sentra-core";
+} from "@bosdev/sentra-core";
+import type { Duration, ItemKind, Level, SentraLogger, SentraOptions } from "@bosdev/sentra-core";
 import { NEVER, array, boolean, number, object, string, enum as zodEnum } from "zod";
 import type { ZodError } from "zod";
 

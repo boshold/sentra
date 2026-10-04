@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { Frame, Item, Sentra } from "@boshold/sentra-core";
+import type { Frame, Item, Sentra } from "@bosdev/sentra-core";
 
 import { findOne, getFull, isKind, listAll, narrow, posts, runOk } from "./helpers/records.js";
 import { startSentraServer } from "./helpers/server.js";

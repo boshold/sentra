@@ -1,4 +1,4 @@
-import { SentraValidationError } from "@boshold/sentra-core";
+import { SentraValidationError } from "@bosdev/sentra-core";
 
 import { parseFilterParams } from "#src/api.js";
 

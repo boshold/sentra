@@ -8,8 +8,8 @@ There is no web UI, no `/store/` endpoint and no forwarding to Sentry.
 
 | You want to                                                     | Use                    | Docs                                     |
 | --------------------------------------------------------------- | ---------------------- | ---------------------------------------- |
-| Run a local server with terminal output, an HTTP API and MCP    | `@boshold/sentra-cli`  | [packages/cli](packages/cli/README.md)   |
-| Embed the receiver in your own process (dev tool, service host) | `@boshold/sentra-core` | [packages/core](packages/core/README.md) |
+| Run a local server with terminal output, an HTTP API and MCP    | `@bosdev/sentra-cli`  | [packages/cli](packages/cli/README.md)   |
+| Embed the receiver in your own process (dev tool, service host) | `@bosdev/sentra-core` | [packages/core](packages/core/README.md) |
 
 ## Quick start
 
@@ -23,7 +23,7 @@ The packages are published to GitHub Packages, not npmjs. Point the `@boshold` s
 Start the server:
 
 ```bash
-pnpx @boshold/sentra-cli
+pnpx @bosdev/sentra-cli
 ```
 
 Point the SDK at it:

@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-import { SentraValidationError, liveFilterSchema } from "@boshold/sentra-core";
-import type { LiveEvent, LiveFilter, Sentra } from "@boshold/sentra-core";
+import { SentraValidationError, liveFilterSchema } from "@bosdev/sentra-core";
+import type { LiveEvent, LiveFilter, Sentra } from "@bosdev/sentra-core";
 import { prettifyError } from "zod";
 
 import { LIVE_KEYS, parseFilterParams } from "#src/api.js";

@@ -9,7 +9,7 @@ describe("renderIssueLine", () => {
     );
     expect(
       renderIssueLine(issue({ title: "a\nb", culprit: "loadUser(Card.vue)", services: [] }), NOW),
-    ).toBe("7c2f91ab error 3× 5m ago [] a — loadUser(Card.vue)");
+    ).toBe("7c2f91ab error 3× 5m ago [] a - loadUser(Card.vue)");
   });
 });
 

@@ -17,7 +17,7 @@ const CANDIDATES: Record<SqliteDriverName, Candidate> = {
   node: { label: "node:sqlite", load: loadNodeSqlite },
 };
 
-/** Bun 1.4.0 aborts with an uncatchable NAPI panic when loading better-sqlite3. */
+/** Bun (seen on 1.4.x) aborts with an uncatchable NAPI panic when loading better-sqlite3. */
 function autoOrder(): SqliteDriverName[] {
   return process.versions.bun === undefined ? ["better-sqlite3", "node"] : ["node"];
 }

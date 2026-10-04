@@ -1,8 +1,9 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-import type { SentraLogger } from "@boshold/sentra-core";
+import type { SentraLogger } from "@bosdev/sentra-core";
 
 import type { Guard } from "#src/guard.js";
+import { messageOf } from "#src/util/error.js";
 
 /** May return a promise; rejections become `500 internal_error`. */
 type NodeListener = (req: IncomingMessage, res: ServerResponse) => void | Promise<void>;
@@ -72,17 +73,12 @@ function routePathname(req: IncomingMessage): string {
   return URL.parse(req.url ?? "/", "http://x")?.pathname ?? "/";
 }
 
-/** Normalized query parameters of the request. */
 function routeSearchParams(req: IncomingMessage): URLSearchParams {
   return URL.parse(req.url ?? "/", "http://x")?.searchParams ?? new URLSearchParams();
 }
 
 function headerValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value.join(",") : value;
-}
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function createRouter(

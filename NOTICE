@@ -5,5 +5,4 @@ Sentra is licensed under the MIT License (see LICENSE).
 
 Ideas for the CORS rules and the MCP tool design come from Spotlight
 (https://github.com/getsentry/spotlight), licensed under Apache-2.0.
-No Spotlight code is included in this repository. If Spotlight code is
-copied in the future, its attribution must be added to this file.
+No Spotlight code is included in this repository.

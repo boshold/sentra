@@ -208,9 +208,8 @@ function transactionLines(data: TransactionData): string[] {
 }
 
 interface TraceSpans {
-  /** Usually already the longest spans of the trace. */
   spans: SpanItem[];
-  /** Spans scanned; defaults to `spans.length`. */
+  /** Spans scanned. */
   total: number;
   /** The scan stopped before the end of the trace. */
   truncated: boolean;

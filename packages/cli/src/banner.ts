@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { buildDsn } from "@boshold/sentra-core";
+import { buildDsn } from "@bosdev/sentra-core";
 
 import { isUnspecifiedHost } from "#src/config.js";
 

@@ -38,6 +38,7 @@ interface Scenario {
 interface ScannedItem {
   type: string;
   payload: Buffer;
+  hasLength: boolean;
 }
 
 // --- recorder -------------------------------------------------------------
@@ -106,12 +107,22 @@ async function startRecorder(statusFor: (index: number) => number): Promise<Reco
 
 // --- scenarios (run in a child process each: Sentry.init is process-global) ---
 
-const HARDWARE_DEVICE_FIELDS = ["boot_time", "cpu_description", "memory_size", "free_memory"];
+const HARDWARE_DEVICE_FIELDS = [
+  "boot_time",
+  "cpu_description",
+  "memory_size",
+  "free_memory",
+  "processor_count",
+  "processor_frequency",
+];
 
 /** Drops machine-specific details so fixtures do not describe the capture machine. */
 function scrubHardware<
-  T extends { contexts?: { app?: object; device?: object; culture?: object } },
+  T extends { contexts?: { app?: object; device?: object; culture?: object; os?: object } },
 >(event: T): T {
+  if (event.contexts?.os !== undefined) {
+    Reflect.set(event.contexts, "os", { name: "Linux" });
+  }
   const device = event.contexts?.device;
   if (device !== undefined) {
     for (const field of HARDWARE_DEVICE_FIELDS) {
@@ -134,6 +145,8 @@ const HARDWARE_SPAN_ATTRIBUTES = [
   "device.cpu_description",
   "device.memory_size",
   "device.free_memory",
+  "device.processor_count",
+  "device.processor_frequency",
   "app.free_memory",
 ];
 
@@ -191,7 +204,7 @@ async function withBrowser(
     const Sentry = await loadBrowserSdk();
     Sentry.init({
       dsn: `http://sentra@127.0.0.1:${port}/my-app/3f9a1c/web/1`,
-      // Happy-dom: the default fetch lookup fails with "The window is closed".
+      // Under happy-dom the default fetch lookup fails with "The window is closed".
       transport: (transportOptions) =>
         Sentry.makeFetchTransport(transportOptions, async (...args) => globalThis.fetch(...args)),
       beforeSend: scrubHardware,
@@ -448,11 +461,11 @@ function scanItems(body: Buffer): { header: Record<string, unknown> | null; item
       if (body[pos] === 0x0a) {
         pos += 1;
       }
-      items.push({ type: itemHeader.type, payload });
+      items.push({ type: itemHeader.type, payload, hasLength: true });
     } else {
       const payload = readLine(body, pos);
       pos = payload.next;
-      items.push({ type: itemHeader.type, payload: payload.line });
+      items.push({ type: itemHeader.type, payload: payload.line, hasLength: false });
     }
   }
   return { header, items };
@@ -475,8 +488,7 @@ function replaceAll(body: Buffer, search: string, replacement: string): Buffer {
   return Buffer.concat(parts);
 }
 
-// The host name is only replaced as a whole JSON string value or path segment:
-// A short host name could otherwise match inside unrelated text.
+// Replace the host name only as a whole JSON string or path segment, never inside other text.
 const REPLACEMENTS: [string, string][] = [
   [ROOT, "/workspace/app"],
   [os.homedir(), "/home/dev"],
@@ -484,16 +496,18 @@ const REPLACEMENTS: [string, string][] = [
   [`/${os.hostname()}/`, `/${SERVER_NAME}/`],
 ];
 
+function needsReplacement(payload: Buffer): boolean {
+  return REPLACEMENTS.some(([search]) => payload.includes(Buffer.from(search)));
+}
+
 function sanitize(request: RecordedRequest): Buffer {
   const decoded = isGzip(request) ? gunzipSync(request.body) : request.body;
-  const { items } = scanItems(decoded);
-  const touchesAttachment = items.some(
-    (item) =>
-      item.type === "attachment" &&
-      REPLACEMENTS.some(([search]) => item.payload.includes(Buffer.from(search))),
+  // Replacements change byte counts, so items with a length header must not need them.
+  const fixed = scanItems(decoded).items.find(
+    (item) => item.hasLength && needsReplacement(item.payload),
   );
-  if (touchesAttachment) {
-    return request.body;
+  if (fixed !== undefined) {
+    throw new Error(`${fixed.type} item contains machine data and cannot be scrubbed in place`);
   }
   let sanitized = decoded;
   for (const [search, replacement] of REPLACEMENTS) {

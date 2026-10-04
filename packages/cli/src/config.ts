@@ -17,8 +17,8 @@ import {
   parseAllowedHost,
   parseSize,
   sqliteStorage,
-} from "@boshold/sentra-core";
-import type { Duration, ItemKind, Level, SentraLogger, SentraOptions } from "@boshold/sentra-core";
+} from "@bosdev/sentra-core";
+import type { Duration, ItemKind, Level, SentraLogger, SentraOptions } from "@bosdev/sentra-core";
 import { NEVER, array, boolean, number, object, string, enum as zodEnum } from "zod";
 import type { ZodError } from "zod";
 
@@ -84,7 +84,10 @@ const publicUrlSchema = string().refine(isPublicUrl, {
   message: "expected an http(s) URL without path, query or credentials",
 });
 
-/** Canonical hostname as URL parsing yields it (`::0` → `[::]`, `0x7f.1` → `127.0.0.1`); `null` if invalid. */
+/**
+ * Canonical hostname as URL parsing yields it (`::0` → `[::]`, `0x7f.1` → `127.0.0.1`); `null` if
+ * invalid.
+ */
 function canonicalHost(host: string): string | null {
   const bare = host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
   if (bare === "" || /[\s/\\@?#[\]]/.test(bare)) {
@@ -214,7 +217,9 @@ function usageError(error: ZodError): CliUsageError {
   return new CliUsageError([...new Set(messages)].join("; "));
 }
 
-/** `$XDG_DATA_HOME/sentra/sentra.db` (absolute values only), else `~/.local/share/sentra/sentra.db`. */
+/**
+ * `$XDG_DATA_HOME/sentra/sentra.db` (absolute values only), else `~/.local/share/sentra/sentra.db`.
+ */
 function defaultDbPath(env: NodeJS.ProcessEnv, homeDir: string): string {
   const xdg = env.XDG_DATA_HOME;
   const base =

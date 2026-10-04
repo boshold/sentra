@@ -112,7 +112,7 @@ describe.skipIf("Bun" in globalThis)("sentra CLI (built binary)", { timeout: 20_
     it("hides transactions by default and shows them with --show all", async () => {
       const hidden = await start();
       await postFixture(hidden.baseUrl, "node-transaction");
-      // The error afterwards proves the transaction was processed (same connection order).
+      // Requests are handled in order, so the later error proves the transaction was processed.
       await postFixture(hidden.baseUrl, "node-error");
       await hidden.waitForStdout(/ERROR my-app/);
       expect(hidden.stdout()).not.toContain(" TXN ");

@@ -1,12 +1,11 @@
-import type { Item, ItemFilter, ItemSummary, Sentra } from "@boshold/sentra-core";
+import type { Item, ItemFilter, ItemSummary, Sentra } from "@bosdev/sentra-core";
 
 import { runScenario } from "./scenario.js";
 import type { RecordedRequest } from "./server.js";
 
-/** Runs a scenario file and expects exit code 0 and no stderr output. */
+/** Runs a scenario file; expects exit code 0 and no stderr besides Node warnings. */
 async function runOk(file: string, env: Record<string, string>): Promise<void> {
   const result = await runScenario(file, env);
-  // Node runtime warnings and their --trace-warnings hint are not failures.
   const stderr = result.stderr
     .split("\n")
     .filter((line) => line !== "" && !/^\((?:node:|Use `node --trace-)/.test(line));

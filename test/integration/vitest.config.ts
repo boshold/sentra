@@ -6,7 +6,7 @@ export default defineConfig({
   root: fileURLToPath(new URL("../..", import.meta.url)),
   resolve: {
     alias: {
-      "@boshold/sentra-core": fileURLToPath(
+      "@bosdev/sentra-core": fileURLToPath(
         new URL("../../packages/core/src/index.ts", import.meta.url),
       ),
     },

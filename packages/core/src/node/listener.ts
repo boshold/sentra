@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { errorResponse } from "#src/ingest/cors.js";
 import { isIngestPath } from "#src/ingest/route.js";
+import { messageOf } from "#src/util/error.js";
 
 type FetchHandler = (request: Request) => Promise<Response>;
 
@@ -25,10 +26,6 @@ function noop(): void {
   // Errors are handled by the caller or are irrelevant after a disconnect.
 }
 
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 function requestUrl(req: IncomingMessage): URL {
   const path = req.url ?? "/";
   const { host } = req.headers;
@@ -43,7 +40,10 @@ function requestUrl(req: IncomingMessage): URL {
 
 const ABSOLUTE_FORM = /^[a-z][a-z0-9+.-]*:\/\/[^/?#]*/i;
 
-/** First `.` / `..` segment of the raw request path (also `%2e`, `\` separators); URL parsing would drop it. */
+/**
+ * First `.` / `..` segment of the raw request path (also `%2e`, `\` separators); URL parsing would
+ * drop it.
+ */
 function rawDotSegment(req: IncomingMessage): string | null {
   const [path = ""] = (req.url ?? "/").replace(ABSOLUTE_FORM, "").split(/[?#]/, 1);
   const found = path.split(/[/\\]/).find((segment) => /^(?:\.|%2e){1,2}$/i.test(segment));

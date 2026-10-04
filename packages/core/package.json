@@ -1,8 +1,18 @@
 {
-  "name": "@boshold/sentra-core",
+  "name": "@bosdev/sentra-core",
   "version": "0.1.0",
   "description": "Local Sentry-compatible event receiver: ingest handler, parser, issues, source maps, storage, query and live subscribe.",
-  "homepage": "https://github.com/boshold/sentra#readme",
+  "keywords": [
+    "dev-tools",
+    "envelope",
+    "error-tracking",
+    "local",
+    "mcp",
+    "sentry",
+    "sentry-sdk",
+    "sourcemaps"
+  ],
+  "homepage": "https://github.com/boshold/sentra/tree/main/packages/core#readme",
   "bugs": {
     "url": "https://github.com/boshold/sentra/issues"
   },
@@ -31,7 +41,8 @@
     }
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "access": "public",
+    "provenance": true
   },
   "scripts": {
     "test": "vitest run",
@@ -53,6 +64,7 @@
     "better-sqlite3": "^13.0.3"
   },
   "engines": {
+    "bun": ">=1.4",
     "node": ">=22.15"
   }
 }

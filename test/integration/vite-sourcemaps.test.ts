@@ -4,8 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { createSentra, memoryStorage } from "@boshold/sentra-core";
-import type { EventData, Frame, Item, Sentra } from "@boshold/sentra-core";
+import { createSentra, memoryStorage } from "@bosdev/sentra-core";
+import type { EventData, Frame, Item, Sentra } from "@bosdev/sentra-core";
 import vue from "@vitejs/plugin-vue";
 import { build } from "esbuild";
 import { createServer } from "vite";

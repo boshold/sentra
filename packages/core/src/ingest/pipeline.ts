@@ -9,9 +9,10 @@ import type { ParsedEnvelope } from "#src/parse/envelope.js";
 import { LOOPBACK_HOSTS } from "#src/sourcemaps/hosts.js";
 import type { IngestBatch, StorageAdapter } from "#src/storage/types.js";
 import type { Envelope, SentraLogger } from "#src/types.js";
+import { messageOf } from "#src/util/error.js";
 import { uuidv7 } from "#src/util/uuidv7.js";
 
-/** Phase 4 hook between normalization and grouping; default returns its input. */
+/** Step between normalization and grouping (source-map resolution); defaults to identity. */
 type MapFramesStep = (items: NewItem[]) => Promise<NewItem[]>;
 
 interface PipelineDeps {
@@ -28,10 +29,6 @@ const NO_GROUPING: GroupingInput = { payloadFingerprint: null, messageTemplate: 
 
 const identity: MapFramesStep = async (items) => items;
 
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 function withoutBody(envelope: Envelope): Omit<Envelope, "body"> {
   return {
     id: envelope.id,
@@ -46,7 +43,9 @@ function withoutBody(envelope: Envelope): Omit<Envelope, "body"> {
   };
 }
 
-/** Sets issueId / fingerprint / culprit on error and message records; returns one issue entry each. */
+/**
+ * Sets issueId / fingerprint / culprit on error and message records; returns one issue entry each.
+ */
 function groupItems(items: NewItem[], receivedAt: string): IssueEntry[] {
   const issues: IssueEntry[] = [];
   for (const { item, grouping } of items) {

@@ -4,7 +4,6 @@ import {
   envelopeToRow,
   itemRowSchema,
   itemToRow,
-  levelRank,
   rowToEnvelope,
   rowToIssue,
   rowToItem,
@@ -138,15 +137,6 @@ describe("timestamps", () => {
     const item = sampleItem("log");
     expect(() => itemToRow({ ...item, timestamp: "" })).toThrow(RangeError);
     expect(toMs("2026-10-01T00:00:00.000Z")).toBe(Date.parse("2026-10-01T00:00:00.000Z"));
-  });
-});
-
-describe("levelRank", () => {
-  it("ranks trace to fatal and null", () => {
-    expect(
-      (["trace", "debug", "info", "warning", "error", "fatal"] as const).map(levelRank),
-    ).toEqual([0, 1, 2, 3, 4, 5]);
-    expect(levelRank(null)).toBeNull();
   });
 });
 

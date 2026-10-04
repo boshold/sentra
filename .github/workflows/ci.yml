@@ -5,13 +5,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  # The release runs this workflow with full: true before it publishes.
+  # The release workflow runs CI before it publishes.
   workflow_call:
-    inputs:
-      full:
-        type: boolean
-        default: false
-        description: Also run the suites that are too slow for every pull request
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -24,8 +19,11 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
         with:
           install: false
@@ -39,8 +37,11 @@ jobs:
   typecheck:
     name: Typecheck
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
         with:
           install: false
@@ -54,12 +55,15 @@ jobs:
   unit-tests:
     name: Unit Tests (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         node-version: [22, 24]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
         with:
           install: false
@@ -83,8 +87,11 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
         with:
           install: false
@@ -99,8 +106,11 @@ jobs:
   bun-tests:
     name: Bun Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
         with:
           install: false
@@ -118,9 +128,41 @@ jobs:
       - run: pnpm build
       - run: pnpm smoke:bun
 
+  # Installs the packed tarballs like a user would and runs them.
+  pack:
+    name: Pack
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
+        with:
+          install: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Pack, install and run
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/pack"
+          mkdir -p "$out/app"
+          core=$(cd packages/core && pnpm pack --json --pack-destination "$out" | jq -r .filename)
+          cli=$(cd packages/cli && pnpm pack --json --pack-destination "$out" | jq -r .filename)
+          cd "$out/app"
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund "$core" "$cli"
+          npx sentra --version
+          node --input-type=module -e "const m = await import('@bosdev/sentra-core'); if (typeof m.createSentra !== 'function') throw new Error('createSentra missing');"
+
   integration-tests:
     name: Integration Tests (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: build
     strategy:
       fail-fast: false
@@ -128,6 +170,8 @@ jobs:
         node-version: [22, 24]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
         with:
           install: false

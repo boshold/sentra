@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 
-import type { Frame, Sentra } from "@boshold/sentra-core";
+import type { Frame, Sentra } from "@bosdev/sentra-core";
 
 import { findOne, getFull, listAll, narrow, posts, runOk } from "./helpers/records.js";
 import { startSentraServer } from "./helpers/server.js";

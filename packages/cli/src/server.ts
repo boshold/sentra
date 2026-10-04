@@ -2,8 +2,8 @@ import { createServer } from "node:http";
 import type { Server } from "node:http";
 import { homedir } from "node:os";
 
-import { SentraConfigError, createSentra, toNodeListener } from "@boshold/sentra-core";
-import type { Sentra, SentraLogger } from "@boshold/sentra-core";
+import { SentraConfigError, createSentra, toNodeListener } from "@bosdev/sentra-core";
+import type { Sentra, SentraLogger } from "@bosdev/sentra-core";
 
 import { createApiHandler } from "#src/api.js";
 import { renderBanner } from "#src/banner.js";
@@ -22,6 +22,7 @@ import { formatLiveEventJson } from "#src/printer/json.js";
 import { formatLiveEvent } from "#src/printer/pretty.js";
 import { createRouter } from "#src/router.js";
 import { createStreamHandler } from "#src/sse.js";
+import { messageOf } from "#src/util/error.js";
 
 interface ServerIo {
   stdout: NodeJS.WritableStream;
@@ -51,10 +52,6 @@ function errorCode(error: unknown): string | null {
   }
   const code: unknown = Reflect.get(error, "code");
   return typeof code === "string" ? code : null;
-}
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 async function openSentra(config: StartConfig, logger: SentraLogger): Promise<Sentra> {
@@ -137,14 +134,13 @@ function subscribeLive(
         : formatLiveEvent(event, { color: config.color, stream: stdout });
     stdout.write(`${lines.join("\n")}\n`);
   });
-  // Stays registered after stop() so later errors on a broken pipe are not unhandled.
   function stop(): void {
     if (active) {
       active = false;
       unsubscribe();
     }
   }
-  // A closed pipe (EPIPE, e.g. `| head -1`) ends live output; the server keeps running.
+  // A closed pipe (`| head -1`) ends live output; the listener stays for later pipe errors.
   stdout.on("error", stop);
   return stop;
 }
@@ -234,7 +230,7 @@ function exitProcess(code: number): void {
   process.exit(code);
 }
 
-/** Closes a server whose startup outlived the signal; startup errors no longer matter then. */
+/** Closes a server that finished starting after the exit signal; startup errors are ignored. */
 async function closeWhenStarted(startup: Promise<RunningServer>): Promise<void> {
   try {
     const server = await startup;
@@ -251,7 +247,8 @@ interface StartDeps {
 
 /**
  * Starts the server and resolves after a clean shutdown on SIGINT/SIGTERM; a second signal exits 1.
- * A signal before startup finished exits 0 at once: startup may hang (e.g. mkdir on an unreachable path).
+ * A signal before startup finished exits 0 at once: startup may hang (e.g. mkdir on an unreachable
+ * path).
  */
 async function start(config: StartConfig, deps: StartDeps = {}): Promise<void> {
   const waiters: (() => void)[] = [];

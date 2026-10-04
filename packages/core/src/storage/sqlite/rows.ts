@@ -16,10 +16,11 @@ import {
 } from "zod";
 import type { ZodType, output } from "zod";
 
+import { levelRank } from "#src/normalize/level.js";
 import { toIso } from "#src/normalize/time.js";
 import type { SqliteParam } from "#src/storage/sqlite/driver/types.js";
 import { ITEM_KINDS, LEVELS } from "#src/types.js";
-import type { Envelope, Issue, Item, ItemSummary, Level, ScopeSummary } from "#src/types.js";
+import type { Envelope, Issue, Item, ItemSummary, ScopeSummary } from "#src/types.js";
 
 const SHORT_ID_LENGTH = 8;
 
@@ -320,11 +321,6 @@ const ENVELOPE_COLUMNS = [
 type ItemRowParams = Record<(typeof ITEM_COLUMNS)[number], SqliteParam>;
 type EnvelopeRowParams = Record<(typeof ENVELOPE_COLUMNS)[number], SqliteParam>;
 
-/** `0` trace … `5` fatal; `null` without level. */
-function levelRank(level: Level | null): number | null {
-  return level === null ? null : LEVELS.indexOf(level);
-}
-
 function itemToRow(item: Item): ItemRowParams {
   return {
     id: item.id,
@@ -340,7 +336,7 @@ function itemToRow(item: Item): ItemRowParams {
     issue_id: item.issueId,
     trace_id: item.traceId,
     level: item.level,
-    level_rank: levelRank(item.level),
+    level_rank: item.level === null ? null : levelRank(item.level),
     environment: item.environment,
     release: item.release,
     platform: item.platform,
@@ -488,7 +484,6 @@ export {
   itemRowSchema,
   itemSummaryRowSchema,
   itemToRow,
-  levelRank,
   rowToEnvelope,
   rowToIssue,
   rowToItem,

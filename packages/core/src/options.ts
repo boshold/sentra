@@ -8,6 +8,8 @@ import {
   DEFAULT_MAX_ENVELOPE_BYTES,
   DEFAULT_MAX_IDLE,
   DEFAULT_NOISE_MAX_AGE,
+  DEFAULT_SOURCE_MAP_BUDGET_MS,
+  DEFAULT_SOURCE_MAP_FETCH_TIMEOUT_MS,
 } from "#src/defaults.js";
 import { buildDsn } from "#src/dsn.js";
 import { SentraConfigError } from "#src/errors.js";
@@ -42,8 +44,9 @@ interface SentraOptions {
     allowedHosts?: string[];
     /** Absolute directories for the FS loader. */
     sourceRoots?: string[];
+    /** Timeout per HTTP fetch. Default 1500. */
     fetchTimeoutMs?: number;
-    /** Per envelope. */
+    /** Time budget per envelope. Default 3000. */
     budgetMs?: number;
   };
   /** Default silent. */
@@ -200,8 +203,8 @@ function resolveSourceMaps(sourceMaps: ParsedOptions["sourceMaps"]): ResolvedOpt
     enabled: sourceMaps?.enabled ?? true,
     allowedHosts: [...(sourceMaps?.allowedHosts ?? [])],
     sourceRoots: (sourceMaps?.sourceRoots ?? []).map((root) => path.resolve(root)),
-    fetchTimeoutMs: sourceMaps?.fetchTimeoutMs ?? 1500,
-    budgetMs: sourceMaps?.budgetMs ?? 3000,
+    fetchTimeoutMs: sourceMaps?.fetchTimeoutMs ?? DEFAULT_SOURCE_MAP_FETCH_TIMEOUT_MS,
+    budgetMs: sourceMaps?.budgetMs ?? DEFAULT_SOURCE_MAP_BUDGET_MS,
   };
 }
 

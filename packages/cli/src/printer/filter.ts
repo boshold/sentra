@@ -1,5 +1,5 @@
-import { LEVELS } from "@boshold/sentra-core";
-import type { Item, Level, LiveEvent } from "@boshold/sentra-core";
+import { LEVELS } from "@bosdev/sentra-core";
+import type { Item, Level, LiveEvent } from "@bosdev/sentra-core";
 
 import type { StartConfig } from "#src/config.js";
 

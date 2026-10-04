@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-import { SentraValidationError } from "@boshold/sentra-core";
-import type { Item, Sentra, SentraLogger } from "@boshold/sentra-core";
+import { SentraValidationError } from "@bosdev/sentra-core";
+import type { Item, Sentra, SentraLogger } from "@bosdev/sentra-core";
 
 import { routePathname, routeSearchParams, sendError, sendJson } from "#src/router.js";
 import type { NodeListener } from "#src/router.js";
@@ -79,13 +79,18 @@ function splitList(values: string[]): string[] {
     .filter((value) => value !== "");
 }
 
-/** Core ignores these (`nonEmpty`, dash-stripped `eventId`); dropping them keeps `filter_required` honest. */
+/**
+ * Core ignores blank values and dash-only `eventId`; dropping them keeps an empty filter from
+ * passing `filter_required`.
+ */
 function isEmptyScalar(key: string, value: string): boolean {
   const trimmed = value.trim();
   return trimmed === "" || (key === "eventId" && trimmed.replaceAll("-", "") === "");
 }
 
-/** Query string → core filter + page input; unknown or repeated scalar params → `invalid_filter`. */
+/**
+ * Query string → core filter + page input; unknown or repeated scalar params → `invalid_filter`.
+ */
 function parseFilterParams(params: URLSearchParams, allowed: readonly string[]): ParsedParams {
   const keys = [...new Set(params.keys())];
   const unknown = keys.filter((key) => !allowed.includes(key));

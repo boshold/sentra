@@ -1,4 +1,4 @@
-import type { LiveEvent } from "@boshold/sentra-core";
+import type { LiveEvent } from "@bosdev/sentra-core";
 
 /** One NDJSON line (`JSON.stringify` never emits raw newlines). */
 function formatLiveEventJson(event: LiveEvent): string {

@@ -31,7 +31,7 @@ const TARGETS: Target[] = [
   },
 ];
 
-/** Version for `sentra --version`: core package.json → "dev". */
+/** Version for `sentra --version`: core's package.json version, else "dev". */
 function resolveVersion(): string {
   const parsed: unknown = JSON.parse(
     readFileSync(path.join(ROOT, "packages/core/package.json"), "utf8"),
@@ -92,8 +92,8 @@ for (const target of TARGETS) {
     platform: "node",
     format: "esm",
     packages: "external",
-    // Tsconfig `paths` map workspace packages to sources; keep them external like other packages.
-    external: ["@boshold/*"],
+    // Workspace packages resolve to sources through tsconfig `paths`, so keep them external.
+    external: ["@bosdev/*"],
     banner: target.banner ? { js: target.banner } : undefined,
     define: { __VERSION__: JSON.stringify(version) },
   });

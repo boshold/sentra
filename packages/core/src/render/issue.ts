@@ -11,7 +11,7 @@ function renderIssueLine(issue: Issue, now: Date): string {
     singleLine(`[${issue.services.join(",")}]`),
     firstLine(issue.title),
   ].join(" ");
-  return issue.culprit === null ? line : `${line} — ${firstLine(issue.culprit)}`;
+  return issue.culprit === null ? line : `${line} - ${firstLine(issue.culprit)}`;
 }
 
 function renderIssueDetail(detail: IssueDetail, now: Date): string {

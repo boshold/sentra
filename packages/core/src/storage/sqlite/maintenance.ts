@@ -83,7 +83,9 @@ function pruneIdleSessions(
   return { sessionsDeleted: sessions.length, itemsDeleted };
 }
 
-/** Runs inside a write transaction. Issues are untouched: only error/message records reference them. */
+/**
+ * Runs inside a write transaction. Issues are untouched: only error/message records reference them.
+ */
 function pruneOldItems(
   { driver, statements }: Connection,
   kinds: ItemKind[],
@@ -99,7 +101,10 @@ function pruneOldItems(
   return { itemsDeleted: changes };
 }
 
-/** Outside any transaction: `VACUUM` fails inside one; the checkpoint shrinks the main file in WAL mode. */
+/**
+ * Outside any transaction: `VACUUM` fails inside one; the checkpoint shrinks the main file in WAL
+ * mode.
+ */
 function vacuum({ driver }: Connection): void {
   driver.exec("VACUUM");
   driver.exec("PRAGMA wal_checkpoint(TRUNCATE)");

@@ -1,15 +1,15 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-import { toNodeListener } from "@boshold/sentra-core";
-import type { Sentra, SentraLogger } from "@boshold/sentra-core";
+import { toNodeListener } from "@bosdev/sentra-core";
+import type { Sentra, SentraLogger } from "@bosdev/sentra-core";
 import { McpServer, createMcpHandler } from "@modelcontextprotocol/server";
 
 import { sendJson } from "#src/router.js";
 import type { NodeListener } from "#src/router.js";
+import { messageOf } from "#src/util/error.js";
 
 interface McpRoute {
   listener: NodeListener;
-  /** Closes the SDK handler. */
   close(): Promise<void>;
 }
 
@@ -20,10 +20,6 @@ function sendJsonRpcError(
   headers: Record<string, string> = {},
 ): void {
   sendJson(res, status, { jsonrpc: "2.0", id: null, error: { code: -32_000, message } }, headers);
-}
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function createMcpRoute(deps: { sentra: Sentra; version: string; logger: SentraLogger }): McpRoute {
@@ -65,7 +61,7 @@ function createMcpRoute(deps: { sentra: Sentra; version: string; logger: SentraL
     return new Response(response.body, { status: response.status, headers });
   }
 
-  // Any failure before the first byte (handler throw, body stream error) gets a generic JSON-RPC 500.
+  // A failure before the first byte (handler throw, body error) gets a generic JSON-RPC 500.
   const forward = toNodeListener(serve, {
     onError(res, error) {
       logger.error(`mcp request failed: ${messageOf(error)}`, { error });

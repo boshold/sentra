@@ -33,8 +33,8 @@ interface SourceMapCache {
 }
 
 const SOURCE_MAP_CACHE_SIZE = 200;
-/** Dev servers rebuild modules at the same URL, so HTTP entries are not trusted forever. */
 const FAILURE_TTL_MS = 5000;
+/** Dev servers rebuild modules at the same URL, so HTTP entries are not trusted forever. */
 const HTTP_UNVALIDATED_TTL_MS = 30_000;
 
 const DETERMINISTIC_FAILURES: ReadonlySet<string> = new Set([
@@ -70,10 +70,9 @@ function fsCacheKey(realPath: string, mtimeMs: number): string {
 }
 
 /**
- * FS keys contain the module's mtime; FS entries also record the source roots (`fsRootsKey`) and
- * external map they were loaded with. HTTP entries are revalidated when the module sent
- * validators; an external map without validators (or a module without them) expires after 30 s.
- * Failures of both expire after 5 s.
+ * FS entries are keyed by mtime and record their source roots and external map. HTTP entries
+ * revalidate when validators exist, else expire after `HTTP_UNVALIDATED_TTL_MS`. Failures expire
+ * after `FAILURE_TTL_MS`.
  */
 function cacheEntryFor(source: CachedSource, now: number, fsRootsKey: string | null): CacheEntry {
   const { result } = source;

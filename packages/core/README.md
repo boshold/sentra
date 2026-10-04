@@ -1,4 +1,4 @@
-# @boshold/sentra-core
+# @bosdev/sentra-core
 
 Embeddable receiver for Sentry SDK envelopes. It exports a fetch-style ingest handler, parses envelopes into typed records, groups errors into issues, maps stack frames through source maps, stores everything in memory or SQLite, and offers a query API, live subscriptions and MCP tool definitions. The host process owns the HTTP server; the core never listens on a port.
 
@@ -8,25 +8,16 @@ Apps keep the official Sentry SDKs and only get a Sentra DSN:
 http://sentra@<host>:<port>/[project/][session/][service/]1
 ```
 
-A missing segment becomes `default`, `_` skips a middle segment, segments match `[A-Za-z0-9._-]{1,64}` and must not be `.` or `..`. The public key and project id are ignored.
+A missing segment becomes `default`, and `_` also means `default` (to skip a middle segment). Segments match `[A-Za-z0-9._-]{1,64}` and must not be `.` or `..`. The public key (`sentra`) and the project id (`1`) are ignored, but the SDK still checks them: the key must match `\w+` and the id must be digits.
 
-For a ready-made server with terminal output, HTTP API and MCP endpoint, use [`@boshold/sentra-cli`](https://github.com/boshold/sentra/tree/main/packages/cli).
+For a ready-made server with terminal output, HTTP API and MCP endpoint, use [`@bosdev/sentra-cli`](https://github.com/boshold/sentra/tree/main/packages/cli).
 
 ## Install
 
-The packages are published to GitHub Packages, not npmjs. Point the `@boshold` scope at it once, with a GitHub token that has `read:packages`, in `~/.npmrc` or the project's `.npmrc`:
-
-```ini
-@boshold:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
-```
-
-Then:
-
 ```bash
-pnpm add @boshold/sentra-core
+pnpm add @bosdev/sentra-core
 # or
-npm install @boshold/sentra-core
+npm install @bosdev/sentra-core
 ```
 
 `better-sqlite3`, the preferred SQLite driver, is an optional dependency and is installed with the package. If it cannot be installed or loaded on a platform, Sentra uses `node:sqlite`.
@@ -39,7 +30,7 @@ Minimal host: one HTTP server, one DSN.
 
 ```ts
 import { createServer } from "node:http";
-import { createSentra, sqliteStorage, toNodeListener } from "@boshold/sentra-core";
+import { createSentra, sqliteStorage, toNodeListener } from "@bosdev/sentra-core";
 
 const sentra = await createSentra({
   storage: sqliteStorage({ path: "/var/lib/my-host/sentra.db" }),
@@ -74,7 +65,22 @@ On shutdown call `unsubscribe()` and `await sentra.close()`. To expose the data 
 
 A host with its own router can use `isIngestPath(pathname)` to decide which requests go to `sentra.handle`. `toNodeListener` answers `400 invalid_scope` when the raw request path has a `.` or `..` segment (also `%2e`), because URL parsing would move the event to another scope; a host that builds the `Request` itself should do the same.
 
-`sentra.handle(request: Request): Promise<Response>` is bound and never rejects. It answers `POST` with `200 { id }` and `OPTIONS` with `204` plus CORS headers. Errors use the body `{ error: { code, message, details? } }` and repeat the message in `X-Sentry-Error`. It never answers `429`, because SDK v11 stops sending for 60 s after one.
+`sentra.handle(request: Request): Promise<Response>` is bound and never rejects. Errors use the body `{ error: { code, message } }` and repeat the message in `X-Sentry-Error`. It never answers `429`, because SDK v11 stops sending for 60 s after one.
+
+| Status | Code                    | When                                                          |
+| ------ | ----------------------- | ------------------------------------------------------------- |
+| `200`  |                         | `POST` stored; body `{ id }`                                  |
+| `204`  |                         | `OPTIONS` preflight, with CORS headers                        |
+| `400`  | `empty_body`            | Empty body, also after decompression                          |
+| `400`  | `invalid_envelope`      | Envelope header cannot be parsed (the raw body is still kept) |
+| `400`  | `invalid_scope`         | Bad scope segment                                             |
+| `404`  | `not_found`             | Path is not an ingest route                                   |
+| `405`  | `method_not_allowed`    | Method other than `POST` or `OPTIONS`                         |
+| `413`  | `payload_too_large`     | Body over `maxEnvelopeBytes`                                  |
+| `415`  | `unsupported_encoding`  | Unknown or corrupt `Content-Encoding`                         |
+| `499`  | `client_closed_request` | Client aborted the request                                    |
+| `500`  | `storage_error`         | Storing the envelope failed                                   |
+| `500`  | `internal_error`        | Unexpected error                                              |
 
 `toNodeListener(handle, options?)` adapts the handler to `node:http` and streams both bodies. `options.onError(res, error)` replaces the default `500` JSON response for unexpected errors.
 
@@ -82,28 +88,28 @@ A host with its own router can use `isIngestPath(pathname)` to decide which requ
 
 `createSentra(options?: SentraOptions): Promise<Sentra>` opens the storage and runs a first retention pass.
 
-| Option                      | Default                                 | Description                                                                                                                                                    |
-| --------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `storage`                   | `memoryStorage()`                       | Storage adapter                                                                                                                                                |
-| `publicUrl`                 | none                                    | Base URL for `getDsn()` without path, e.g. `http://127.0.0.1:8969`                                                                                             |
-| `retention.maxIdle`         | `"30d"` (`DEFAULT_MAX_IDLE`)            | Delete a session after this time without events; duration or `"never"`                                                                                         |
-| `retention.noiseMaxAge`     | `"7d"` (`DEFAULT_NOISE_MAX_AGE`)        | Delete `span`, `transaction`, `log`, `other` records older than this; duration or `"never"`                                                                    |
-| `limits.maxEnvelopeBytes`   | 20 MiB (`DEFAULT_MAX_ENVELOPE_BYTES`)   | Max envelope size, before and after decompression                                                                                                              |
-| `limits.maxAttachmentBytes` | 10 MiB (`DEFAULT_MAX_ATTACHMENT_BYTES`) | Larger attachments are recorded without their bytes                                                                                                            |
-| `rawEnvelopes`              | `true`                                  | Keep raw envelope bodies                                                                                                                                       |
-| `sourceMaps.enabled`        | `true`                                  | Map stack frames at ingest                                                                                                                                     |
-| `sourceMaps.allowedHosts`   | `[]`                                    | Hosts (`host`, `host:port`, IPv6) allowed for HTTP fetches and in-app frames, added to loopback. The port is ignored: `host:port` allows that host on any port |
-| `sourceMaps.sourceRoots`    | `[]`                                    | Absolute directories the FS loader may read                                                                                                                    |
-| `sourceMaps.fetchTimeoutMs` | `1500`                                  | Timeout per HTTP fetch                                                                                                                                         |
-| `sourceMaps.budgetMs`       | `3000`                                  | Time budget for mapping one envelope                                                                                                                           |
-| `logger`                    | silent                                  | `{ debug, info, warn, error }(message, meta?)`                                                                                                                 |
+| Option                      | Default                                        | Description                                                                                                                                                    |
+| --------------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `storage`                   | `memoryStorage()`                              | Storage adapter                                                                                                                                                |
+| `publicUrl`                 | none                                           | Base URL for `getDsn()` without path, e.g. `http://127.0.0.1:8969`                                                                                             |
+| `retention.maxIdle`         | `"30d"` (`DEFAULT_MAX_IDLE`)                   | Delete a session after this time without events; duration or `"never"`                                                                                         |
+| `retention.noiseMaxAge`     | `"7d"` (`DEFAULT_NOISE_MAX_AGE`)               | Delete `span`, `transaction`, `log`, `other` records older than this; duration or `"never"`                                                                    |
+| `limits.maxEnvelopeBytes`   | 20 MiB (`DEFAULT_MAX_ENVELOPE_BYTES`)          | Max envelope size, before and after decompression                                                                                                              |
+| `limits.maxAttachmentBytes` | 10 MiB (`DEFAULT_MAX_ATTACHMENT_BYTES`)        | Larger attachments are recorded without their bytes                                                                                                            |
+| `rawEnvelopes`              | `true`                                         | Keep raw envelope bodies. Envelopes that fail to parse always keep theirs                                                                                      |
+| `sourceMaps.enabled`        | `true`                                         | Map stack frames at ingest                                                                                                                                     |
+| `sourceMaps.allowedHosts`   | `[]`                                           | Hosts (`host`, `host:port`, IPv6) allowed for HTTP fetches and in-app frames, added to loopback. The port is ignored: `host:port` allows that host on any port |
+| `sourceMaps.sourceRoots`    | `[]`                                           | Absolute directories the FS loader may read                                                                                                                    |
+| `sourceMaps.fetchTimeoutMs` | `1500` (`DEFAULT_SOURCE_MAP_FETCH_TIMEOUT_MS`) | Timeout per HTTP fetch                                                                                                                                         |
+| `sourceMaps.budgetMs`       | `3000` (`DEFAULT_SOURCE_MAP_BUDGET_MS`)        | Time budget for mapping one envelope                                                                                                                           |
+| `logger`                    | silent                                         | `{ debug, info, warn, error }(message, meta?)`                                                                                                                 |
 
-Durations are `<number><ms|s|m|h|d|w>`, for example `"60m"` or `"30d"`. The defaults are exported as `DEFAULT_MAX_IDLE`, `DEFAULT_NOISE_MAX_AGE`, `DEFAULT_MAX_ENVELOPE_BYTES`, `DEFAULT_MAX_ATTACHMENT_BYTES` and `DEFAULT_MAX_ITEMS`. Invalid options throw `SentraConfigError` (`invalid_option`).
+Durations are `<number><ms|s|m|h|d|w>`, for example `"60m"` or `"30d"`. The defaults are exported as `DEFAULT_MAX_IDLE`, `DEFAULT_NOISE_MAX_AGE`, `DEFAULT_MAX_ENVELOPE_BYTES`, `DEFAULT_MAX_ATTACHMENT_BYTES`, `DEFAULT_MAX_ITEMS`, `DEFAULT_SOURCE_MAP_FETCH_TIMEOUT_MS` and `DEFAULT_SOURCE_MAP_BUDGET_MS`. Invalid options throw `SentraConfigError` (`invalid_option`).
 
 ## Storage
 
 - `memoryStorage({ maxItems })`: in-process storage. `maxItems` defaults to `10_000`; the oldest records are evicted first.
-- `sqliteStorage({ path, driver })`: SQLite file; missing directories are created. `driver` is `"auto"` (default), `"better-sqlite3"` or `"node"`. On Node, `auto` tries `better-sqlite3` first and falls back to `node:sqlite` (Node `>=22.13`); on Bun it uses `node:sqlite` only (see below). On Node 22, `node:sqlite` prints an `ExperimentalWarning`; Sentra filters it. If no driver loads, `createSentra` throws `SentraStorageError` (`storage_unavailable`) listing each driver's error. A driver that loads but cannot open the file (directory, no write permission) fails with `storage_unavailable` and `cannot open database file <path>: <reason>`, without trying the next driver.
+- `sqliteStorage({ path, driver })`: SQLite file; missing directories are created. `driver` is `"auto"` (default), `"better-sqlite3"` or `"node"`. On Node, `auto` tries `better-sqlite3` first and falls back to `node:sqlite`; on Bun it uses `node:sqlite` only (see below). On Node 22, `node:sqlite` prints an `ExperimentalWarning`; Sentra filters it. If no driver loads, `createSentra` throws `SentraStorageError` (`storage_unavailable`) listing each driver's error. A driver that loads but cannot open the file (directory, no write permission) fails with `storage_unavailable` and `cannot open database file <path>: <reason>`, without trying the next driver.
 - Use one writer per database file: do not open the same file from two Sentra instances at the same time.
 - `sentra.info().storage` reports `{ type, driver, path }`, with `driver` set to `"better-sqlite3"` or `"node"` for SQLite.
 
@@ -111,12 +117,12 @@ The `StorageAdapter` interface and its types are exported for custom adapters.
 
 ## Bun-compiled hosts
 
-On Bun, `auto` uses only `node:sqlite` (built into Bun `>=1.4`) and never loads `better-sqlite3`: Bun 1.4.0 aborts the whole process when it loads that native addon, and the abort cannot be caught. `driver: "better-sqlite3"` still forces it. Hosts compiled with `bun build --compile` can pass `--external better-sqlite3` to keep the unused package out of the binary.
+On Bun, `auto` uses only `node:sqlite` (built into Bun `>=1.4`) and never loads `better-sqlite3`: Bun aborts the whole process when it loads that native addon (seen on 1.4.x), and the abort cannot be caught. `driver: "better-sqlite3"` still forces it. Hosts compiled with `bun build --compile` can pass `--external better-sqlite3` to keep the unused package out of the binary.
 
 ## DSN helpers
 
 ```ts
-import { buildDsn, isIngestPath, parseDsnScope } from "@boshold/sentra-core";
+import { buildDsn, isIngestPath, parseDsnScope } from "@bosdev/sentra-core";
 
 buildDsn({ baseUrl: "http://127.0.0.1:8969", project: "my-app", service: "web" });
 // "http://sentra@127.0.0.1:8969/my-app/_/web/1"
@@ -155,17 +161,16 @@ Filter fields:
 - Items: `kind`, `itemType`, `level`, `minLevel`, `environment`, `release`, `eventId`, `issueId`, `traceId`, `q` (case-insensitive substring of the title).
 - Issues: `kind` (`"error"` or `"message"`), `level`, `minLevel`, `q`.
 
-Pagination: `page = { limit, cursor }`, `limit` defaults to 50; values above 500 are capped at 500. Pass `nextCursor` from the previous page as `cursor`; it is `null` on the last page. Invalid filters throw `SentraValidationError` (`invalid_filter`, `invalid_cursor`). The zod schemas are exported (`itemFilterSchema`, `issueFilterSchema`, `scopeFilterSchema`, `liveFilterSchema`, `pageInputSchema`, ...).
+Pagination: `page = { limit, cursor }`, `limit` defaults to 50; values outside 1 to 500 are clamped. Pass `nextCursor` from the previous page as `cursor`; it is `null` on the last page. Invalid filters throw `SentraValidationError` (`invalid_filter`, `invalid_cursor`). The zod schemas are exported (`itemFilterSchema`, `issueFilterSchema`, `scopeFilterSchema`, `liveFilterSchema`, `pageInputSchema`, ...).
 
 ```ts
-const page = await sentra.query.listItems(
-  { project: "my-app", kind: ["error", "message"], since: "24h" },
-  { limit: 20 },
-);
+const filter: ItemFilter = { project: "my-app", kind: ["error", "message"], since: "24h" };
+const page = await sentra.query.listItems(filter, { limit: 20 });
+// Reuse the same filter with the cursor.
 const next =
   page.nextCursor === null
     ? null
-    : await sentra.query.listItems({ project: "my-app" }, { cursor: page.nextCursor });
+    : await sentra.query.listItems(filter, { limit: 20, cursor: page.nextCursor });
 ```
 
 ## Live updates
@@ -255,6 +260,13 @@ All errors extend `SentraError` with `code` and optional `details`.
 | `SentraScopeError`      | `invalid_scope`        | Ingest: bad scope segment (`400`)                              |
 | `SentraTooLargeError`   | `payload_too_large`    | Ingest: envelope over `maxEnvelopeBytes` (`413`)               |
 | `SentraEncodingError`   | `unsupported_encoding` | Ingest: unknown or corrupt `Content-Encoding` (`415`)          |
+
+## Other exports
+
+- Renderers used by the CLI and the MCP tools: `renderIssueLine`, `renderIssueDetail`, `renderItemLine`, `renderItemDetail`, `renderScopeTable`, `renderFrameLines`, `renderStackMarkdown`, `formatFrameLocation`, `formatAttributes`, `formatDuration`, `formatRelativeTime`, `formatScope`.
+- Parsers and checks: `parseDuration`, `parseDurationOrNever`, `isDuration`, `parseSize`, `parseAllowedHost`, `isScopeSegment`, `sanitizeText`, `firstLine`.
+- Constants: `VERSION`, `ITEM_KINDS`, `LEVELS`.
+- Zod schemas: `itemFilterSchema`, `issueFilterSchema`, `scopeFilterSchema`, `liveFilterSchema`, `pageInputSchema`, `timeFilterSchema`, `scopeTimeFilterSchema`, `itemKindSchema`, `levelSchema`.
 
 ## License
 

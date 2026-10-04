@@ -54,7 +54,10 @@ function newestMtime(dir: string): number {
   );
 }
 
-/** Runs `pnpm build` when the entry is missing or older than any source file. */
+/**
+ * Runs `pnpm build` when the entry is missing or older than any source, build script or
+ * package.json.
+ */
 async function ensureBuilt(): Promise<void> {
   const entry = cliEntry();
   const sources = ["packages/core/src", "packages/cli/src"].map((dir) => path.join(REPO_ROOT, dir));

@@ -121,26 +121,38 @@ jobs:
           git fetch release/release.bundle "refs/tags/$TAG:refs/tags/$TAG"
           git push --atomic origin "refs/tags/$TAG^{commit}:refs/heads/$GITHUB_REF_NAME" "refs/tags/$TAG"
 
-      # Node 24 ships npm 11, which supports trusted publishing (OIDC). No cache, no token.
+      # No cache, no token: npm authenticates through trusted publishing (OIDC).
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
 
+      # Staged versions stay hidden until a maintainer approves them with 2FA on npmjs.com.
       # Versions already on npm are skipped, so a failed run can be repeated.
-      - name: Publish
+      - name: Stage on npm
         env:
           VERSION: ${{ needs.build.outputs.version }}
         run: |
           set -euo pipefail
-          npm --version
+          npm_version=$(npm --version)
+          node -e "const [a, b] = process.argv[1].split('.').map(Number); process.exit(a > 11 || (a === 11 && b >= 15) ? 0 : 1)" "$npm_version" \
+            || { echo "::error::npm stage publish needs npm >= 11.15, got $npm_version"; exit 1; }
           while read -r file; do
             name=$(tar -xOzf "release/$file" package/package.json | jq -r .name)
             if [[ -n "$(npm view "$name@$VERSION" version 2>/dev/null || true)" ]]; then
               echo "$name@$VERSION is already on npm, skipping"
             else
-              npm publish "./release/$file" --access public --provenance
+              npm stage publish "./release/$file" --access public --provenance
             fi
           done < release/order.txt
+          {
+            echo "### Approve the staged packages"
+            echo
+            echo "Approve on npmjs.com or with \`npm stage approve\`, core first:"
+            echo
+            while read -r file; do
+              echo "- \`$(tar -xOzf "release/$file" package/package.json | jq -r .name)@$VERSION\`"
+            done < release/order.txt
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Create the GitHub release
         env:

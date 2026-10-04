@@ -305,3 +305,5 @@ A second signal during shutdown exits with `1` at once.
 ## License
 
 MIT
+
+Sentra is not affiliated with or endorsed by Sentry. Sentry is a trademark of Functional Software, Inc.

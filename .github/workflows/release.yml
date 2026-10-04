@@ -78,7 +78,7 @@ jobs:
         if: ${{ inputs.dry-run }}
         run: |
           set -euo pipefail
-          while read -r file; do npm publish "release/$file" --access public --dry-run; done < release/order.txt
+          while read -r file; do npm publish "./release/$file" --access public --dry-run; done < release/order.txt
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -138,7 +138,7 @@ jobs:
             if [[ -n "$(npm view "$name@$VERSION" version 2>/dev/null || true)" ]]; then
               echo "$name@$VERSION is already on npm, skipping"
             else
-              npm publish "release/$file" --access public --provenance
+              npm publish "./release/$file" --access public --provenance
             fi
           done < release/order.txt
 

@@ -35,40 +35,31 @@ Requires Node `>=22.15` or Bun `>=1.4`.
 
 ## Usage
 
+Minimal host: one HTTP server, one DSN.
+
 ```ts
 import { createServer } from "node:http";
 import { createSentra, sqliteStorage, toNodeListener } from "@boshold/sentra-core";
-import { McpServer } from "@modelcontextprotocol/server";
 
 const sentra = await createSentra({
   storage: sqliteStorage({ path: "/var/lib/my-host/sentra.db" }),
   publicUrl: "http://127.0.0.1:8969",
-  retention: { maxIdle: "30d", noiseMaxAge: "7d" },
 });
 
 createServer(toNodeListener(sentra.handle)).listen(8969, "127.0.0.1");
 
-sentra.addSourceRoot("/path/to/my-app");
 const dsn = sentra.getDsn({ project: "my-app", session: "3f9a1c", service: "web" });
 // http://sentra@127.0.0.1:8969/my-app/3f9a1c/web/1 -> pass as SENTRY_DSN to the service
+```
+
+Then read what arrives:
+
+```ts
+sentra.addSourceRoot("/path/to/my-app");
 
 const unsubscribe = sentra.subscribe({ project: "my-app", session: "3f9a1c" }, (event) => {
   if (event.type === "item.created") console.log(event.item.kind, event.item.title);
 });
-
-const mcpServer = new McpServer({ name: "my-host", version: "1.0.0" });
-for (const tool of sentra.mcpTools()) {
-  mcpServer.registerTool(
-    tool.name,
-    {
-      title: tool.title,
-      description: tool.description,
-      inputSchema: tool.inputSchema,
-      annotations: tool.annotations,
-    },
-    (args) => tool.handler(args),
-  );
-}
 
 const issues = await sentra.query.listIssues({
   project: "my-app",
@@ -77,7 +68,11 @@ const issues = await sentra.query.listIssues({
 });
 ```
 
-`mcpServer` stands for the host's own `McpServer`, from SDK v2 `@modelcontextprotocol/server` as shown or SDK v1 `@modelcontextprotocol/sdk/server/mcp.js`; connecting it to a transport is up to the host. On shutdown call `unsubscribe()` and `await sentra.close()`. A host with its own router can use `isIngestPath(pathname)` to decide which requests go to `sentra.handle`. `toNodeListener` answers `400 invalid_scope` when the raw request path has a `.` or `..` segment (also `%2e`), because URL parsing would move the event to another scope; a host that builds the `Request` itself should do the same.
+On shutdown call `unsubscribe()` and `await sentra.close()`. To expose the data to AI agents, register `sentra.mcpTools()` on your MCP server (see [MCP tools](#mcp-tools)).
+
+### HTTP handler
+
+A host with its own router can use `isIngestPath(pathname)` to decide which requests go to `sentra.handle`. `toNodeListener` answers `400 invalid_scope` when the raw request path has a `.` or `..` segment (also `%2e`), because URL parsing would move the event to another scope; a host that builds the `Request` itself should do the same.
 
 `sentra.handle(request: Request): Promise<Response>` is bound and never rejects. It answers `POST` with `200 { id }` and `OPTIONS` with `204` plus CORS headers. Errors use the body `{ error: { code, message, details? } }` and repeat the message in `X-Sentry-Error`. It never answers `429`, because SDK v11 stops sending for 60 s after one.
 
@@ -203,9 +198,11 @@ type LiveEvent =
 
 `sentra.mcpTools()` returns five read-only tool definitions: `sentra_list_scopes`, `sentra_list_issues`, `sentra_get_issue`, `sentra_list_items`, `sentra_get_item`. Each has `name`, `title`, `description`, `inputSchema` (a zod v4 object), `annotations` and `handler(input)`. The output is compact Markdown.
 
-The same loop works with SDK v1 (`@modelcontextprotocol/sdk`) and v2 (`@modelcontextprotocol/server`):
+Register them on the host's own `McpServer`, from SDK v2 `@modelcontextprotocol/server` or SDK v1 `@modelcontextprotocol/sdk/server/mcp.js`. Connecting it to a transport is up to the host:
 
 ```ts
+import { McpServer } from "@modelcontextprotocol/server";
+
 const mcpServer = new McpServer({ name: "my-host", version: "1.0.0" });
 for (const tool of sentra.mcpTools()) {
   mcpServer.registerTool(
@@ -231,6 +228,8 @@ The FS source-map loader only reads inside source roots (realpath checked, symli
 sentra.addSourceRoot("/path/to/my-app"); // absolute path; adding twice is a no-op
 sentra.removeSourceRoot("/path/to/my-app");
 ```
+
+Nuxt setup and troubleshooting: [docs/nuxt.md](https://github.com/boshold/sentra/blob/main/docs/nuxt.md).
 
 ## Maintenance
 

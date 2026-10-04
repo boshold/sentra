@@ -8,7 +8,8 @@ import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 
 import { z } from "zod";
 
-const PACKAGES = ["packages/core/package.json", "packages/cli/package.json"];
+const CORE_MANIFEST = "packages/core/package.json";
+const PACKAGES = [CORE_MANIFEST, "packages/cli/package.json"];
 const TAG = /^v(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$/;
 
 const bumpSchema = z.enum(["patch", "minor", "major"]);
@@ -59,7 +60,24 @@ if (!resumed && process.env.GITHUB_SHA && git("rev-parse", "HEAD") !== process.e
   throw new Error("the branch moved since the run started; start a new release");
 }
 
-const version = (headTag ?? bump(latestTag() ?? [0, 0, 0], part)).join(".");
+if (resumed) {
+  console.log(
+    `::notice::HEAD is already tagged; resuming v${headTag.join(".")} and ignoring bump=${part}`,
+  );
+}
+
+const current = manifestSchema.parse(JSON.parse(readFileSync(CORE_MANIFEST, "utf8"))).version;
+const currentVersion = parseTag(`v${current}`);
+if (!currentVersion) {
+  throw new Error(`${CORE_MANIFEST} has an invalid version ${current}`);
+}
+const next = headTag ?? bump(latestTag() ?? [0, 0, 0], part);
+if (!resumed && compare(next, currentVersion) <= 0) {
+  throw new Error(
+    `next version ${next.join(".")} is not above ${current}; are the release tags fetched?`,
+  );
+}
+const version = next.join(".");
 const tag = `v${version}`;
 
 const changed: string[] = [];
@@ -73,7 +91,7 @@ for (const file of PACKAGES) {
     throw new Error(`${tag} is already tagged but ${file} has ${manifest.version}`);
   }
   // Replaces only the version line so the file keeps its formatting.
-  writeFileSync(file, text.replace(/^(?<key>\s*"version":\s*)"[^"]*"/mu, `$<key>"${version}"`));
+  writeFileSync(file, text.replace(/^(?<key> {2}"version": )"[^"]*"/mu, `$<key>"${version}"`));
   changed.push(file);
 }
 

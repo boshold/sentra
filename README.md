@@ -109,3 +109,5 @@ Setup, tests and the release process are described in [CONTRIBUTING.md](CONTRIBU
 ## License
 
 MIT, see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+Sentra is not affiliated with or endorsed by Sentry. Sentry is a trademark of Functional Software, Inc.

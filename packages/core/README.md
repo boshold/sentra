@@ -271,3 +271,5 @@ All errors extend `SentraError` with `code` and optional `details`.
 ## License
 
 MIT
+
+Sentra is not affiliated with or endorsed by Sentry. Sentry is a trademark of Functional Software, Inc.

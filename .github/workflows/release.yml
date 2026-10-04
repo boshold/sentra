@@ -1,7 +1,5 @@
 name: Release
 
-# Shared release flow, see https://github.com/boshold/gh-actions#releasing
-
 on:
   workflow_dispatch:
     inputs:
@@ -11,7 +9,7 @@ on:
         options: [patch, minor, major]
         default: patch
       dry-run:
-        description: Test and build, but push, publish and release nothing
+        description: Bump and build, but push, publish and release nothing
         type: boolean
         default: false
 
@@ -21,25 +19,90 @@ concurrency:
 
 permissions:
   contents: read
-  packages: read
 
 jobs:
   ci:
     uses: ./.github/workflows/ci.yml
-    permissions:
-      contents: read
-    with:
-      full: true
-    secrets: inherit
 
-  # Dependencies all come from npmjs, so publishing falls back to github.token.
   release:
     needs: ci
-    uses: boshold/gh-actions/.github/workflows/release-npm.yml@main
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: write
-      packages: write
-    with:
-      bump: ${{ inputs.bump }}
-      dry-run: ${{ inputs.dry-run }}
-      node-version: "22"
+      id-token: write
+    steps:
+      # A dry run may come from any branch, e.g. to try a changed workflow on a pull request.
+      - name: Require the default branch
+        if: ${{ !inputs.dry-run }}
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          [[ "$GITHUB_REF" == "refs/heads/$DEFAULT_BRANCH" ]] || { echo "::error::releases run from $DEFAULT_BRANCH, not $GITHUB_REF_NAME"; exit 1; }
+
+      # The branch, not the run's sha: a repeated run has to see the release commit it pushed.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+      - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
+        with:
+          install: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      # Trusted publishing (OIDC) needs npm >= 11.5.1; Node 22 ships npm 10.
+      - run: npm install -g npm@latest
+      - run: pnpm install --frozen-lockfile
+
+      - id: version
+        env:
+          RELEASE_BUMP: ${{ inputs.bump }}
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        run: pnpm exec tsx scripts/release-version.ts
+
+      - run: pnpm build
+
+      - name: Push the release commit and tag
+        if: ${{ !inputs.dry-run && steps.version.outputs.resumed != 'true' }}
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: git push --atomic origin "HEAD:$GITHUB_REF_NAME" "refs/tags/$TAG"
+
+      # pnpm pack resolves workspace: ranges and applies .pnpmfile.cjs; npm publishes via OIDC.
+      # Versions already on npm are skipped, so a failed run can be repeated.
+      - name: Publish
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          DRY_RUN: ${{ inputs.dry-run }}
+          NODE_AUTH_TOKEN: ""
+        run: |
+          set -euo pipefail
+          mkdir -p dist-pack
+          for dir in packages/core packages/cli; do
+            name=$(node -p "require('./$dir/package.json').name")
+            if [[ -n "$(npm view "$name@$VERSION" version 2>/dev/null || true)" ]]; then
+              echo "$name@$VERSION is already on npm, skipping"
+              continue
+            fi
+            tarball=$(cd "$dir" && pnpm pack --pack-destination "$GITHUB_WORKSPACE/dist-pack" | tail -1)
+            if [[ "$DRY_RUN" == "true" ]]; then
+              npm publish "$tarball" --access public --dry-run
+            else
+              npm publish "$tarball" --access public --provenance
+            fi
+          done
+
+      - name: Create the GitHub release
+        if: ${{ !inputs.dry-run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 && { echo "release $TAG exists"; exit 0; }
+          gh release create "$TAG" --verify-tag --title "$TAG" --generate-notes

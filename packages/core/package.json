@@ -3,14 +3,14 @@
   "version": "0.1.0",
   "description": "Local Sentry-compatible event receiver: ingest handler, parser, issues, source maps, storage, query and live subscribe.",
   "keywords": [
-    "sentry",
-    "sentry-sdk",
+    "dev-tools",
     "envelope",
     "error-tracking",
-    "sourcemaps",
-    "mcp",
     "local",
-    "dev-tools"
+    "mcp",
+    "sentry",
+    "sentry-sdk",
+    "sourcemaps"
   ],
   "homepage": "https://github.com/boshold/sentra#readme",
   "bugs": {
@@ -64,7 +64,7 @@
     "better-sqlite3": "^13.0.3"
   },
   "engines": {
-    "node": ">=22.15",
-    "bun": ">=1.4"
+    "bun": ">=1.4",
+    "node": ">=22.15"
   }
 }

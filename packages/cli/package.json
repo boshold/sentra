@@ -3,15 +3,15 @@
   "version": "0.1.0",
   "description": "Standalone local Sentry-compatible event receiver with live terminal output, HTTP query API and MCP endpoint.",
   "keywords": [
-    "sentry",
-    "sentry-sdk",
+    "cli",
+    "dev-tools",
     "envelope",
     "error-tracking",
-    "sourcemaps",
-    "mcp",
     "local",
-    "dev-tools",
-    "cli"
+    "mcp",
+    "sentry",
+    "sentry-sdk",
+    "sourcemaps"
   ],
   "homepage": "https://github.com/boshold/sentra#readme",
   "bugs": {

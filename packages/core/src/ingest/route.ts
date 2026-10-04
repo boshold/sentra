@@ -6,7 +6,10 @@ const SEGMENT_RE = /^[A-Za-z0-9._-]{1,64}$/;
 const INGEST_SUFFIX_RE = /(?:^|\/)api\/(?<projectId>\d+)\/envelope\/?$/;
 const MAX_SEGMENTS = 3;
 
-/** Whether `value` is a valid scope segment: `[A-Za-z0-9._-]{1,64}`, but not `.` or `..` (URL parsing drops them). */
+/**
+ * Whether `value` is a valid scope segment: `[A-Za-z0-9._-]{1,64}`, but not `.` or `..` (URL
+ * parsing drops them).
+ */
 function isScopeSegment(value: string): boolean {
   return SEGMENT_RE.test(value) && value !== "." && value !== "..";
 }

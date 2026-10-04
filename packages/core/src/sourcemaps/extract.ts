@@ -47,7 +47,9 @@ interface HttpCacheInfo {
   map: HttpValidators | null;
 }
 
-/** External map of an FS-loaded module: `path` as referenced, the rest from `stat` of its realpath. */
+/**
+ * External map of an FS-loaded module: `path` as referenced, the rest from `stat` of its realpath.
+ */
 interface FsMapFile {
   path: string;
   realPath: string;
@@ -76,7 +78,10 @@ const COMMENT_PREFIX = /^[ \t]*(?:\/\/[#@]|\/\*#)[ \t]*$/;
 const BASE64_BODY = /^[A-Za-z0-9+/\-_]*={0,2}$/;
 const URL_SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*:/;
 
-/** Value of the last valid `sourceMappingURL` comment, scanning from the end (no backtracking regex). */
+/**
+ * Value of the last valid `sourceMappingURL` comment, scanning from the end (no backtracking
+ * regex).
+ */
 function findSourceMappingUrl(code: string): string | null {
   let searchFrom = code.length;
   while (searchFrom >= 0) {

@@ -42,7 +42,7 @@ async function cancelBody(response: Response): Promise<void> {
   try {
     await response.body?.cancel();
   } catch {
-    // Ignore: body already closed
+    // Ignore: body already closed.
   }
 }
 

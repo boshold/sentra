@@ -25,7 +25,9 @@ function toMsExact(input: unknown): number | null {
   return Number.isFinite(ms) && Math.abs(ms) <= MAX_DATE_MS ? ms : null;
 }
 
-/** `(end - start)` in ms (µs precision); `0` if either is missing/invalid or the result is negative. */
+/**
+ * `(end - start)` in ms (µs precision); `0` if either is missing/invalid or the result is negative.
+ */
 function durationMs(start: unknown, end: unknown): number {
   const startMs = toMsExact(start);
   const endMs = toMsExact(end);

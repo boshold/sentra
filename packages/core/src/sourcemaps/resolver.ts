@@ -86,8 +86,9 @@ type FrameOutcome =
   | { kind: "mapped"; frame: Frame }
   | { kind: "error"; frame: Frame; reason: string };
 
-// Per-envelope caps: bound the work an untrusted sender can trigger.
+// Max source map errors recorded per event.
 const MAX_ERRORS = 50;
+// Per-envelope caps: bound the work an untrusted sender can trigger.
 const MAX_CONCURRENT_LOADS = 8;
 const MAX_CANDIDATES = 50;
 const MAX_ROOT_CHECKS = 200;

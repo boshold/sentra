@@ -79,7 +79,7 @@ describe.each(drivers)("two processes writing with %s", (driverName) => {
       }
 
       const result = await writer.done;
-      // Stderr may hold Node 22's ExperimentalWarning; failures are counted in stdout.
+      // Node 22 may print an ExperimentalWarning to stderr; failures are counted in stdout.
       expect(result.code, result.stderr).toBe(0);
       expect(result.stdout.trim().split("\n").at(-1)).toBe(JSON.stringify({ errors: 0 }));
 

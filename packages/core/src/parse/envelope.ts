@@ -117,7 +117,10 @@ function parseItems(cursor: Cursor, items: ParsedItem[], warnings: string[]): vo
   }
 }
 
-/** Parses Sentry envelope bytes. Never throws; fails only on an empty body or invalid envelope header. */
+/**
+ * Parses Sentry envelope bytes. Never throws; fails only on an empty body or invalid envelope
+ * header.
+ */
 export function parseEnvelope(body: Uint8Array): ParseEnvelopeResult {
   if (body.byteLength === 0) {
     return { ok: false, error: "empty envelope" };

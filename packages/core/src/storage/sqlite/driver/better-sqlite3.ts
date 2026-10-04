@@ -57,7 +57,10 @@ function openDatabase(Database: DatabaseConstructor, path: string): BetterSqlite
   }
 }
 
-/** `new Database` loads the native addon; probing `:memory:` separates a broken binding from a bad path. */
+/**
+ * `new Database` loads the native addon; probing `:memory:` separates a broken binding from a bad
+ * path.
+ */
 export async function loadBetterSqlite3(): Promise<(path: string) => SqliteDriver> {
   const { default: Database } = await import("better-sqlite3");
   const probe = new Database(":memory:");

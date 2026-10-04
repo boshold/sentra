@@ -5,7 +5,9 @@ function insertSql(table: string, columns: readonly string[]): string {
   return `INSERT INTO ${table} (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`;
 }
 
-/** Writes can finish out of receipt order: latest-event fields follow receipt time, then item id. */
+/**
+ * Writes can finish out of receipt order: latest-event fields follow receipt time, then item id.
+ */
 function latestOnly(column: string): string {
   return `${column} = CASE WHEN excluded.last_seen_at > last_seen_at
     OR (excluded.last_seen_at = last_seen_at AND excluded.last_item_id > last_item_id)

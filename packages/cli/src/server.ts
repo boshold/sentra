@@ -22,6 +22,7 @@ import { formatLiveEventJson } from "#src/printer/json.js";
 import { formatLiveEvent } from "#src/printer/pretty.js";
 import { createRouter } from "#src/router.js";
 import { createStreamHandler } from "#src/sse.js";
+import { messageOf } from "#src/util/error.js";
 
 interface ServerIo {
   stdout: NodeJS.WritableStream;
@@ -51,10 +52,6 @@ function errorCode(error: unknown): string | null {
   }
   const code: unknown = Reflect.get(error, "code");
   return typeof code === "string" ? code : null;
-}
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 async function openSentra(config: StartConfig, logger: SentraLogger): Promise<Sentra> {
@@ -143,7 +140,7 @@ function subscribeLive(
       unsubscribe();
     }
   }
-  // A closed pipe (e.g. `| head -1`) ends live output; the listener stays so later pipe errors are not unhandled.
+  // A closed pipe (`| head -1`) ends live output; the listener stays for later pipe errors.
   stdout.on("error", stop);
   return stop;
 }
@@ -250,7 +247,8 @@ interface StartDeps {
 
 /**
  * Starts the server and resolves after a clean shutdown on SIGINT/SIGTERM; a second signal exits 1.
- * A signal before startup finished exits 0 at once: startup may hang (e.g. mkdir on an unreachable path).
+ * A signal before startup finished exits 0 at once: startup may hang (e.g. mkdir on an unreachable
+ * path).
  */
 async function start(config: StartConfig, deps: StartDeps = {}): Promise<void> {
   const waiters: (() => void)[] = [];

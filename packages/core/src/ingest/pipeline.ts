@@ -43,7 +43,9 @@ function withoutBody(envelope: Envelope): Omit<Envelope, "body"> {
   };
 }
 
-/** Sets issueId / fingerprint / culprit on error and message records; returns one issue entry each. */
+/**
+ * Sets issueId / fingerprint / culprit on error and message records; returns one issue entry each.
+ */
 function groupItems(items: NewItem[], receivedAt: string): IssueEntry[] {
   const issues: IssueEntry[] = [];
   for (const { item, grouping } of items) {

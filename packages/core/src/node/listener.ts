@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { errorResponse } from "#src/ingest/cors.js";
 import { isIngestPath } from "#src/ingest/route.js";
+import { messageOf } from "#src/util/error.js";
 
 type FetchHandler = (request: Request) => Promise<Response>;
 
@@ -23,10 +24,6 @@ const BODYLESS_METHODS = new Set(["GET", "HEAD"]);
 
 function noop(): void {
   // Errors are handled by the caller or are irrelevant after a disconnect.
-}
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function requestUrl(req: IncomingMessage): URL {

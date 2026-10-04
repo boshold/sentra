@@ -5,9 +5,11 @@ import { SentraError } from "#src/errors.js";
 import { errorResponse, jsonResponse, preflightResponse } from "#src/ingest/cors.js";
 import { decompress, readBodyCapped } from "#src/ingest/decompress.js";
 import { isIngestPath, parseIngestPath } from "#src/ingest/route.js";
+import { SILENT_LOGGER } from "#src/options.js";
 import { parseEnvelope } from "#src/parse/envelope.js";
 import type { ParsedEnvelope } from "#src/parse/envelope.js";
 import type { Scope, SentraLogger } from "#src/types.js";
+import { messageOf } from "#src/util/error.js";
 
 interface IngestLimits {
   maxEnvelopeBytes: number;
@@ -30,12 +32,6 @@ interface IngestHandlerOptions {
   now?: () => Date;
 }
 
-function noop(): void {
-  // Silent default logger.
-}
-
-const SILENT_LOGGER: SentraLogger = { debug: noop, info: noop, warn: noop, error: noop };
-
 const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   invalid_scope: 400,
   payload_too_large: 413,
@@ -43,10 +39,6 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
 };
 
 const dsnSchema = string();
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 function emptyBody(): Response {
   return errorResponse(400, "empty_body", "request body is empty");
@@ -86,7 +78,7 @@ function createIngestHandler(
     try {
       return parseDsnScope(dsn.data);
     } catch (error) {
-      // ParseDsnScope only throws SentraScopeError.
+      // `parseDsnScope` only throws `SentraScopeError`.
       logger.warn(`ignoring envelope header dsn: ${messageOf(error)}`, { dsn: dsn.data });
       return scope;
     }

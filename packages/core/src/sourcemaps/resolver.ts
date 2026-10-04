@@ -25,6 +25,7 @@ import { createBudget, createTraceMap, mapFrame } from "#src/sourcemaps/mapper.j
 import type { Budget } from "#src/sourcemaps/mapper.js";
 import { classifyLocation, frameLocation } from "#src/sourcemaps/paths.js";
 import type { EventData, Frame, Item, SentraLogger, SourceMapInfo } from "#src/types.js";
+import { messageOf } from "#src/util/error.js";
 import { createLimiter } from "#src/util/limit.js";
 import type { Limiter } from "#src/util/limit.js";
 
@@ -85,8 +86,8 @@ type FrameOutcome =
   | { kind: "mapped"; frame: Frame }
   | { kind: "error"; frame: Frame; reason: string };
 
+// Per-envelope caps: bound the work an untrusted sender can trigger.
 const MAX_ERRORS = 50;
-/** Per envelope: bounds the work an untrusted sender can trigger. */
 const MAX_CONCURRENT_LOADS = 8;
 const MAX_CANDIDATES = 50;
 const MAX_ROOT_CHECKS = 200;
@@ -100,16 +101,12 @@ const NOT_APPLICABLE: SourceMapInfo = {
   errors: [],
 };
 
-/** Validates and normalizes a source root; shared with `Sentra.addSourceRoot`. */
+/** Validates and normalizes an absolute source root. */
 function absoluteDir(dir: string): string {
   if (!path.isAbsolute(dir)) {
     throw new SentraConfigError("invalid_option", `source root must be absolute: ${dir}`);
   }
   return path.resolve(dir);
-}
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function eventDataOf(item: Item): EventData | null {
@@ -268,10 +265,7 @@ function createSourceMapResolver(options: SourceMapResolverOptions): SourceMapRe
     return entry;
   }
 
-  /**
-   * Must be called synchronously in frame order: root checks are counted here and load slots
-   * are handed out along `admissionTail`, so only eligible files use them, deterministically.
-   */
+  /** Call synchronously in frame order, so caps apply deterministically along `admissionTail`. */
   async function admit(location: string, ctx: ResolveContext): Promise<Admission> {
     const existing = ctx.admissions.get(location);
     if (existing !== undefined) {

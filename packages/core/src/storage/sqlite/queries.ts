@@ -1,5 +1,5 @@
+import { levelRank } from "#src/normalize/level.js";
 import type { SqliteParam } from "#src/storage/sqlite/driver/types.js";
-import { levelRank } from "#src/storage/sqlite/rows.js";
 import type {
   ResolvedIssueFilter,
   ResolvedItemFilter,
@@ -57,7 +57,7 @@ function where(condition: SqlFragment): string {
 }
 
 function levelsFrom(minLevel: Level): Level[] {
-  const rank = levelRank(minLevel) ?? 0;
+  const rank = levelRank(minLevel);
   return LEVELS.filter((_level, index) => index >= rank);
 }
 

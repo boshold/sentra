@@ -9,9 +9,10 @@ import type { ParsedEnvelope } from "#src/parse/envelope.js";
 import { LOOPBACK_HOSTS } from "#src/sourcemaps/hosts.js";
 import type { IngestBatch, StorageAdapter } from "#src/storage/types.js";
 import type { Envelope, SentraLogger } from "#src/types.js";
+import { messageOf } from "#src/util/error.js";
 import { uuidv7 } from "#src/util/uuidv7.js";
 
-/** Phase 4 hook between normalization and grouping; default returns its input. */
+/** Step between normalization and grouping (source-map resolution); defaults to identity. */
 type MapFramesStep = (items: NewItem[]) => Promise<NewItem[]>;
 
 interface PipelineDeps {
@@ -27,10 +28,6 @@ type IssueEntry = IngestBatch["issues"][number];
 const NO_GROUPING: GroupingInput = { payloadFingerprint: null, messageTemplate: null };
 
 const identity: MapFramesStep = async (items) => items;
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 function withoutBody(envelope: Envelope): Omit<Envelope, "body"> {
   return {

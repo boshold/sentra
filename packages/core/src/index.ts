@@ -4,6 +4,8 @@ export {
   DEFAULT_MAX_IDLE,
   DEFAULT_MAX_ITEMS,
   DEFAULT_NOISE_MAX_AGE,
+  DEFAULT_SOURCE_MAP_BUDGET_MS,
+  DEFAULT_SOURCE_MAP_FETCH_TIMEOUT_MS,
 } from "#src/defaults.js";
 export { buildDsn, parseDsnScope } from "#src/dsn.js";
 export {

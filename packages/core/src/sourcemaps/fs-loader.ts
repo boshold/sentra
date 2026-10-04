@@ -85,9 +85,8 @@ async function readInto(handle: FileHandle, buffer: Buffer, offset: number): Pro
 }
 
 /**
- * Reads a resolved file through one no-follow handle, bounded to `maxBytes`.
- * `null` when too large; throws `FileChangedError` when the file differs from `file`
- * (replaced, modified or resized since `resolveInsideRoots`), so cache keys stay exact.
+ * Reads through one no-follow handle up to `maxBytes`; `null` if too large. Throws
+ * `FileChangedError` if the file changed since `resolveInsideRoots`, so cache keys stay exact.
  */
 async function readResolved(file: ResolvedFsFile, maxBytes: number): Promise<string | null> {
   if (file.size > maxBytes) {

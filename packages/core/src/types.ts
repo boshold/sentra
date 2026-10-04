@@ -1,4 +1,4 @@
-// Public data model (40_data_model.md) and filter types (50_api.md).
+// Public data model and filter types.
 
 import type { ZodObject } from "zod";
 
@@ -241,7 +241,6 @@ export interface IssueDetail extends Issue {
   latest: Item | null;
 }
 
-// Kept verbatim from 40_data_model.md.
 // prettier-ignore
 export type LiveEvent =
   | { type: "item.created"; item: Item; issue: { id: string; isNew: boolean; count: number } | null }

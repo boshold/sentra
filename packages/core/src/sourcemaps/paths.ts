@@ -79,13 +79,13 @@ function toDisplaySource(source: string, roots: readonly string[]): string {
       value = decodePathname(new URL(value).pathname);
       relative = true;
     } catch {
-      // Keep as is
+      // Not a valid URL; keep as is.
     }
   } else if (/^file:/i.test(value)) {
     try {
       value = fileURLToPath(value);
     } catch {
-      // Keep as is
+      // Not a valid URL; keep as is.
     }
   }
 

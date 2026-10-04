@@ -2,7 +2,6 @@ import { buildDsn } from "#src/dsn.js";
 import { SentraConfigError } from "#src/errors.js";
 import { createIngestHandler } from "#src/ingest/handler.js";
 import { createPipeline } from "#src/ingest/pipeline.js";
-import type { MapFramesStep } from "#src/ingest/pipeline.js";
 import { createLiveBus } from "#src/live/bus.js";
 import { createMcpTools } from "#src/mcp/tools.js";
 import { normalizeEventId } from "#src/normalize/schemas.js";
@@ -36,6 +35,7 @@ import type {
   SentraToolDefinition,
   TimeFilter,
 } from "#src/types.js";
+import { messageOf } from "#src/util/error.js";
 import { VERSION } from "#src/util/version.js";
 
 interface SentraBlob {
@@ -86,15 +86,6 @@ interface Sentra {
   close(): Promise<void>;
 }
 
-/** Internal hooks for later phases and tests. */
-interface SentraInternals {
-  mapFrames?: MapFramesStep;
-}
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 async function blobOf(options: ResolvedOptions, item: Item | null): Promise<SentraBlob | null> {
   if (item === null) {
     return null;
@@ -112,10 +103,8 @@ async function blobOf(options: ResolvedOptions, item: Item | null): Promise<Sent
   return null;
 }
 
-async function createSentraWith(
-  input: SentraOptions | undefined,
-  internals: SentraInternals,
-): Promise<Sentra> {
+/** Creates a core instance: resolves options and runs `storage.init()`. */
+async function createSentra(input?: SentraOptions): Promise<Sentra> {
   const options = resolveOptions(input);
   const { storage, logger } = options;
   const storageInfo = await storage.init();
@@ -140,17 +129,15 @@ async function createSentraWith(
   retention.start();
   const bus = createLiveBus(logger);
   const sourceRoots = new Set(options.sourceMaps.sourceRoots);
-  const mapFrames =
-    internals.mapFrames ??
-    (options.sourceMaps.enabled
-      ? createSourceMapResolver({
-          allowedHosts: options.sourceMaps.allowedHosts,
-          sourceRoots,
-          fetchTimeoutMs: options.sourceMaps.fetchTimeoutMs,
-          budgetMs: options.sourceMaps.budgetMs,
-          logger,
-        }).mapFrames
-      : undefined);
+  const mapFrames = options.sourceMaps.enabled
+    ? createSourceMapResolver({
+        allowedHosts: options.sourceMaps.allowedHosts,
+        sourceRoots,
+        fetchTimeoutMs: options.sourceMaps.fetchTimeoutMs,
+        budgetMs: options.sourceMaps.budgetMs,
+        logger,
+      }).mapFrames
+    : undefined;
   const onEnvelope = createPipeline({ storage, bus, options, logger, mapFrames });
   const handler = createIngestHandler({
     limits: { maxEnvelopeBytes: options.limits.maxEnvelopeBytes },
@@ -228,10 +215,5 @@ async function createSentraWith(
   };
 }
 
-/** Creates a core instance: resolves options and runs `storage.init()`. */
-async function createSentra(options?: SentraOptions): Promise<Sentra> {
-  return createSentraWith(options, {});
-}
-
-export { createSentra, createSentraWith };
-export type { Sentra, SentraBlob, SentraInfo, SentraInternals, SentraQuery };
+export { createSentra };
+export type { Sentra, SentraBlob, SentraInfo, SentraQuery };

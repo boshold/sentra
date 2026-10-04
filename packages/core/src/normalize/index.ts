@@ -6,6 +6,7 @@ import { normalizeSpans } from "#src/normalize/span.js";
 import { normalizeTransaction } from "#src/normalize/transaction.js";
 import type { NewItem, NormalizeContext, NormalizeResult } from "#src/normalize/types.js";
 import type { ParsedEnvelope, ParsedItem } from "#src/parse/envelope.js";
+import { messageOf } from "#src/util/error.js";
 
 type JsonNormalizer = (payload: unknown, ctx: NormalizeContext) => NormalizeResult;
 
@@ -18,10 +19,6 @@ const JSON_NORMALIZERS: ReadonlyMap<string, JsonNormalizer> = new Map([
 
 type JsonResult = { ok: true; value: unknown } | { ok: false; error: string };
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 function parseJson(bytes: Uint8Array): JsonResult {
   const text = decodeText(bytes);
   if (text === null) {
@@ -31,7 +28,7 @@ function parseJson(bytes: Uint8Array): JsonResult {
     const value: unknown = JSON.parse(text);
     return { ok: true, value };
   } catch (error) {
-    return { ok: false, error: `invalid JSON: ${errorMessage(error)}` };
+    return { ok: false, error: `invalid JSON: ${messageOf(error)}` };
   }
 }
 
@@ -60,7 +57,7 @@ function normalizeItems(parsed: ParsedEnvelope, ctx: NormalizeContext): NewItem[
     try {
       return normalizeItem(item, ctx);
     } catch (error) {
-      return [normalizeOther(item, ctx, errorMessage(error))];
+      return [normalizeOther(item, ctx, messageOf(error))];
     }
   });
 }

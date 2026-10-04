@@ -14,6 +14,7 @@ import type {
   SentraToolDefinition,
   SpanItem,
 } from "#src/types.js";
+import { messageOf } from "#src/util/error.js";
 
 interface McpToolDeps {
   query: SentraQuery;
@@ -40,10 +41,6 @@ function textResult(text: string): ToolResult {
 
 function errorResult(text: string): ToolResult {
   return { isError: true, content: [{ type: "text", text }] };
-}
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 /** Validates input with `schema`, runs `run`, and turns every failure into an error result. */

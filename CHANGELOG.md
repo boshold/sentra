@@ -2,6 +2,10 @@
 
 All notable changes to `@bosdev/sentra-core` and `@bosdev/sentra-cli`. Both packages share one version number.
 
+## Unreleased
+
+- Packages are published to npm as `@bosdev/sentra-core` and `@bosdev/sentra-cli`, with provenance. Version 0.1.0 was only published to GitHub Packages under the `@boshold` scope.
+
 ## 0.1.0 - 2026-10-03
 
 First release.
@@ -10,7 +14,7 @@ First release.
 
 - Ingest handler for the Sentry envelope protocol (`POST /[project/][session/][service/]api/:projectId/envelope/`, `OPTIONS` with open CORS), with gzip, deflate, brotli and zstd decoding, size limits and `toNodeListener` for `node:http`.
 - Scope from the DSN path (`project/session/service`, `default` for missing segments, `_` to skip one) or from the envelope header DSN when the SDK uses `tunnel`.
-- Own envelope parser that keeps going on bad items and stores the raw body of envelopes that fail to parse.
+- Built-in envelope parser that continues past bad items and stores the raw body of envelopes that fail to parse.
 - Typed records: `error`, `message`, `transaction`, `span`, `log`, `attachment`, `other`, including streamed spans and logs from Sentry JS SDK v11.
 - Issue grouping per `(project, session)` with in-app aware fingerprints and custom fingerprint support.
 - Source mapping at ingest: HTTP loader for Vite and Nuxt dev servers on loopback or allowed hosts, FS loader limited to source roots, `inApp` recomputation, unreliable SSR positions flagged.
@@ -23,7 +27,7 @@ First release.
 
 ### `@bosdev/sentra-cli`
 
-- `sentra` / `sentra start`: HTTP server on `127.0.0.1:8969` with a startup banner, SQLite storage under `$XDG_DATA_HOME/sentra/sentra.db` or memory storage. Printed DSNs use `http://127.0.0.1:<port>` unless `--public-url` is set.
+- `sentra` / `sentra start`: HTTP server on `127.0.0.1:8969` with a startup banner, SQLite storage under `$XDG_DATA_HOME/sentra/sentra.db` (fallback `~/.local/share/sentra/sentra.db`) or memory storage. Printed DSNs use `http://127.0.0.1:<port>` unless `--public-url` is set.
 - Live terminal output (pretty or NDJSON) with kind, level and scope filters.
 - HTTP query API under `/api/sentra`, server-sent events at `/api/sentra/stream` and a stateless MCP endpoint at `/mcp`, protected by `Host` / `Origin` checks.
 - `sentra dsn` to print scoped DSNs.

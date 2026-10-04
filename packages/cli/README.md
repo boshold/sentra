@@ -6,13 +6,6 @@ Built on [`@bosdev/sentra-core`](https://github.com/boshold/sentra/tree/main/pac
 
 ## Install
 
-The packages are published to GitHub Packages, not npmjs. Point the `@boshold` scope at it once, with a GitHub token that has `read:packages`, in `~/.npmrc` or the project's `.npmrc`:
-
-```ini
-@boshold:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
-```
-
 Run it without installing:
 
 ```bash
@@ -58,7 +51,7 @@ To keep apps and services apart, add scope segments to the DSN:
 http://sentra@<host>:<port>/[project/][session/][service/]1
 ```
 
-A missing segment becomes `default`, `_` skips a middle segment. Segments match `[A-Za-z0-9._-]{1,64}` and must not be `.` or `..`.
+A missing segment becomes `default`, `_` skips a middle segment. Segments match `[A-Za-z0-9._-]{1,64}` and must not be `.` or `..`. The public key (`sentra`) and the project id (`1`) are ignored, but the SDK still checks them: the key must match `\w+` and the id must be digits.
 
 ## Recipes
 
@@ -109,14 +102,14 @@ Durations: `<number><ms|s|m|h|d|w>`, e.g. `12h`, `30d`. Sizes: `<number>[b|kb|mb
 
 ### Server
 
-| Flag             | Type               | Default                   | Description                                                            |
-| ---------------- | ------------------ | ------------------------- | ---------------------------------------------------------------------- |
-| `--host`         | string             | `127.0.0.1`               | Bind address                                                           |
-| `--port`, `-p`   | number             | `8969`                    | Port; `0` picks a free port (the banner shows it). Port in use: exit 1 |
-| `--public-url`   | URL                | `http://127.0.0.1:<port>` | Base URL for printed DSNs: scheme, host and port, no path              |
-| `--allowed-host` | string, repeatable | none                      | Extra allowed `Host` / `Origin` for the query API and MCP              |
-| `--no-api`       | flag               | off                       | Disable `/api/sentra` (including the stream)                           |
-| `--no-mcp`       | flag               | off                       | Disable `/mcp`                                                         |
+| Flag             | Type               | Default                   | Description                                                                  |
+| ---------------- | ------------------ | ------------------------- | ---------------------------------------------------------------------------- |
+| `--host`         | string             | `127.0.0.1`               | Bind address                                                                 |
+| `--port`, `-p`   | number             | `8969`                    | Port; `0` picks a free port (the banner shows it). Port in use: exit 1       |
+| `--public-url`   | URL                | `http://127.0.0.1:<port>` | Base URL for printed DSNs: scheme, host and port, no path                    |
+| `--allowed-host` | string, repeatable | none                      | Extra allowed `Host` / `Origin` for the query API and MCP; a port is ignored |
+| `--no-api`       | flag               | off                       | Disable `/api/sentra` (including the stream)                                 |
+| `--no-mcp`       | flag               | off                       | Disable `/mcp`                                                               |
 
 ### Storage and limits
 
@@ -134,25 +127,25 @@ Durations: `<number><ms|s|m|h|d|w>`, e.g. `12h`, `30d`. Sizes: `<number>[b|kb|mb
 
 ### Source maps
 
-| Flag                | Type               | Default           | Description                                                                                               |
-| ------------------- | ------------------ | ----------------- | --------------------------------------------------------------------------------------------------------- |
-| `--no-source-maps`  | flag               | off               | Disable source mapping                                                                                    |
-| `--source-root`     | path, repeatable   | current directory | Directory the FS source-map loader may read                                                               |
-| `--source-map-host` | string, repeatable | none              | Extra host for HTTP source-map fetches. For a non-loopback `--host`, the bound host and LAN IPs are added |
+| Flag                | Type               | Default           | Description                                                                                                                  |
+| ------------------- | ------------------ | ----------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `--no-source-maps`  | flag               | off               | Disable source mapping                                                                                                       |
+| `--source-root`     | path, repeatable   | current directory | Directory the FS source-map loader may read                                                                                  |
+| `--source-map-host` | string, repeatable | none              | Extra host for HTTP source-map fetches; a port is ignored. For a non-loopback `--host`, the bound host and LAN IPs are added |
 
 ### Live output
 
-| Flag            | Type                                   | Default             | Description                                                                        |
-| --------------- | -------------------------------------- | ------------------- | ---------------------------------------------------------------------------------- |
-| `--show`        | comma list \| `all`                    | `error,message,log` | Kinds printed live                                                                 |
-| `--min-level`   | level                                  | none                | Minimum level printed live (`trace`, `debug`, `info`, `warning`, `error`, `fatal`) |
-| `--project`     | string                                 | none                | Print only this project                                                            |
-| `--session`     | string                                 | none                | Print only this session                                                            |
-| `--service`     | string                                 | none                | Print only this service                                                            |
-| `--format`      | `pretty` \| `json`                     | `pretty`            | Live output format; `json` prints one `LiveEvent` per line                         |
-| `--quiet`, `-q` | flag                                   | off                 | No live output                                                                     |
-| `--no-color`    | flag                                   | off                 | Disable colors                                                                     |
-| `--log-level`   | `error` \| `warn` \| `info` \| `debug` | `warn`              | Internal log level (stderr)                                                        |
+| Flag            | Type                                   | Default             | Description                                                                                                       |
+| --------------- | -------------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `--show`        | comma list \| `all`                    | `error,message,log` | Kinds printed live                                                                                                |
+| `--min-level`   | level                                  | none                | Minimum level printed live (`trace`, `debug`, `info`, `warning`, `error`, `fatal`); hides records without a level |
+| `--project`     | string                                 | none                | Print only this project                                                                                           |
+| `--session`     | string                                 | none                | Print only this session                                                                                           |
+| `--service`     | string                                 | none                | Print only this service                                                                                           |
+| `--format`      | `pretty` \| `json`                     | `pretty`            | Live output format; `json` prints one `LiveEvent` per line                                                        |
+| `--quiet`, `-q` | flag                                   | off                 | No live output                                                                                                    |
+| `--no-color`    | flag                                   | off                 | Disable colors                                                                                                    |
+| `--log-level`   | `error` \| `warn` \| `info` \| `debug` | `warn`              | Internal log level (stderr)                                                                                       |
 
 ### Other
 
@@ -195,16 +188,17 @@ Each record that passes the filters is printed as it arrives:
 16:40:15 BAD   my-app/3f9a1c/web  invalid envelope: envelope header is not valid JSON (envelope 01a10235-634d-7652-963f-b994557d1164)
 ```
 
-- Errors and messages show in-app frames, a count of collapsed library frames and the issue (`NEW` on first sight, then the count). Positions marked with `~` come from SSR frames whose position is not reliable.
+- Errors and messages show in-app frames, a count of collapsed library frames and the issue with its count (`NEW` on first sight). Positions marked with `~` come from SSR frames whose position is not reliable.
 - `TXN` lines are transactions and spans (`--show all` or `--show transaction,span`), `ITEM` lines are attachments and other records, `BAD` lines are envelopes that failed to parse.
-- Filter with `--show`, `--min-level`, `--project`, `--session`, `--service`.
+- Filter with `--show`, `--min-level`, `--project`, `--session`, `--service`. Failed envelopes are always printed.
+- `--show span` prints only root spans. `other` records of type `session`, `sessions` and `client_report` are printed only with `--show all`.
 - `--format json` prints NDJSON (`{"type":"item.created","item":{...},"issue":{...}}`). The banner then goes to stderr so stdout stays machine-readable. The same happens with `--quiet`.
 - Colors are used only on a terminal. `NO_COLOR` or `--no-color` turns them off.
 - If stdout is closed (for example `| head -1`), live output stops and the server keeps running.
 
 ## Query API
 
-JSON API under `/api/sentra`. Array parameters can be repeated or comma separated (`kind=error,message`). Unknown or repeated scalar parameters return `400 invalid_filter`. Lists are paginated with `limit` (default 50; values above 500 are capped at 500) and `cursor` (`nextCursor` of the previous page).
+JSON API under `/api/sentra`. Array parameters can be repeated or comma separated (`kind=error,message`). Unknown or repeated scalar parameters return `400 invalid_filter`. Lists are paginated with `limit` (default 50, between 1 and 500) and `cursor` (`nextCursor` of the previous page).
 
 | Route                                 | Parameters                                                                                                                                                                         | Response                                           | Errors                                      |
 | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------- |
@@ -215,7 +209,7 @@ JSON API under `/api/sentra`. Array parameters can be repeated or comma separate
 | `GET /api/sentra/items`               | `project`, `session`, `service`, `since`, `from`, `to`, `kind`, `itemType`, `level`, `minLevel`, `environment`, `release`, `eventId`, `issueId`, `traceId`, `q`, `limit`, `cursor` | `{ items: ItemSummary[], nextCursor }`             | `400 invalid_filter`, `400 invalid_cursor`  |
 | `GET /api/sentra/items/:id`           | `:id` = item id or 32-hex event id                                                                                                                                                 | Item with `data`                                   | `404 not_found`                             |
 | `GET /api/sentra/items/:id/envelope`  | `:id` = item id or event id                                                                                                                                                        | Raw envelope, `application/x-sentry-envelope`      | `404 not_found`, `404 raw_not_stored`       |
-| `GET /api/sentra/attachments/:itemId` | none                                                                                                                                                                               | Attachment bytes with `Content-Disposition`        | `404 not_found`, `404 blob_not_stored`      |
+| `GET /api/sentra/attachments/:itemId` | none (also serves binary `other` records)                                                                                                                                          | Attachment bytes with `Content-Disposition`        | `404 not_found`, `404 blob_not_stored`      |
 | `GET /api/sentra/envelopes/failed`    | `project`, `session`, `service`, `since`, `from`, `to`, `limit`, `cursor`                                                                                                          | `{ items: Envelope[], nextCursor }`                | `400 invalid_filter`, `400 invalid_cursor`  |
 | `GET /api/sentra/stream`              | `project`, `session`, `service`, `kind`, `itemType`, `level`, `minLevel`, `environment`, `release`, `eventId`, `issueId`, `traceId`, `q`                                           | Server-sent events (see below)                     | `400 invalid_filter`                        |
 | `DELETE /api/sentra/items`            | Same filters as `GET /api/sentra/items`, at least one required                                                                                                                     | `{ itemsDeleted }`                                 | `400 filter_required`, `400 invalid_filter` |
@@ -242,7 +236,7 @@ event: envelope.failed
 data: {"type":"envelope.failed","envelope":{...},"error":"..."}
 ```
 
-The stream starts with a `: connected` comment, then a `: ping` comment follows every 15 s. Clients ignore both.
+The stream starts with a `: connected` comment, then a `: ping` comment follows every 15 s. Clients ignore both. Methods other than `GET` get `405`; during shutdown new connections get `503 shutting_down`.
 
 ```bash
 curl -N "http://127.0.0.1:8969/api/sentra/stream?project=my-app&kind=error"
@@ -258,13 +252,13 @@ claude mcp add --transport http sentra http://127.0.0.1:8969/mcp
 
 All tools are read-only and return compact Markdown.
 
-| Tool                 | Input                                                                                                                                                                                                                                      | Output                                                                          |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
-| `sentra_list_scopes` | `project?`, `session?`                                                                                                                                                                                                                     | Scopes with last seen, record and issue counts                                  |
-| `sentra_list_issues` | `project?`, `session?`, `service?`, `kind?`, `minLevel?`, `since?` (default `24h`), `q?`, `limit?` (default 20, max 100), `cursor?`                                                                                                        | One line per issue with short id, level, count, services                        |
-| `sentra_get_issue`   | `id` (16-char id or short id prefix of at least 8 chars), `project?`, `session?`                                                                                                                                                           | Issue summary and its latest record                                             |
-| `sentra_list_items`  | `project?`, `session?`, `service?`, `kind?`, `itemType?`, `level?`, `minLevel?`, `environment?`, `release?`, `eventId?`, `issueId?`, `traceId?`, `q?`, `since?` (default `60m`), `from?`, `to?`, `limit?` (default 20, max 100), `cursor?` | One line per record with time, kind, level, scope, title, id                    |
-| `sentra_get_item`    | `id` (item id or event id)                                                                                                                                                                                                                 | Kind-specific detail: frames, request, tags, breadcrumbs, spans, log attributes |
+| Tool                 | Input                                                                                                                                                                                                                                                             | Output                                                                          |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `sentra_list_scopes` | `project?`, `session?`                                                                                                                                                                                                                                            | Scopes with last seen, record and issue counts                                  |
+| `sentra_list_issues` | `project?`, `session?`, `service?`, `kind?`, `minLevel?`, `since?` (default `24h`), `q?`, `limit?` (default 20, max 100), `cursor?`                                                                                                                               | One line per issue with short id, level, count, services                        |
+| `sentra_get_issue`   | `id` (16-char id or short id prefix of at least 8 chars), `project?`, `session?`                                                                                                                                                                                  | Issue summary and its latest record                                             |
+| `sentra_list_items`  | `project?`, `session?`, `service?`, `kind?`, `itemType?`, `level?`, `minLevel?`, `environment?`, `release?`, `eventId?`, `issueId?`, `traceId?`, `q?`, `since?` (default `60m` when `from` is not set), `from?`, `to?`, `limit?` (default 20, max 100), `cursor?` | One line per record with time, kind, level, scope, title, id                    |
+| `sentra_get_item`    | `id` (item id or event id)                                                                                                                                                                                                                                        | Kind-specific detail: frames, request, tags, breadcrumbs, spans, log attributes |
 
 ## Storage and retention
 

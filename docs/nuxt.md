@@ -1,6 +1,6 @@
 # Nuxt
 
-How to send Nuxt dev errors to Sentra and what Sentra can map. Verified with Nuxt 4.5.2, `@sentry/nuxt` 11.4.0 and Vite 8.3.2 in `nuxt dev`, on Node 24.21 and Node 22.23 (including the SSR plugin below).
+How to send Nuxt dev errors to Sentra and what Sentra can map. Last checked in October 2026 with Nuxt 4.5.2, `@sentry/nuxt` 11.4.0 and Vite 8.3.2 in `nuxt dev`, on Node 24.21 and Node 22.23 (including the SSR plugin below).
 
 ## Setup
 
@@ -61,7 +61,7 @@ pnpm dev
 
 `sentra dsn --project my-app --session 3f9a1c --service web` prints this DSN.
 
-Keep `enabled: true` in dev. With `enabled: false` the SDK never calls `Sentry.init` and nothing is sent.
+Keep `enabled: true` in dev. With `enabled: false` the SDK sends nothing.
 
 Sentra needs the app directory as a source root to map server frames. The CLI uses the directory it was started in; otherwise pass `--source-root /path/to/nuxt-app`. When embedding the core:
 
@@ -77,7 +77,7 @@ const sentra = await createSentra({
 http.createServer(toNodeListener(sentra.handle)).listen(8969, "127.0.0.1");
 ```
 
-An embedding host can also add roots at runtime with `sentra.addSourceRoot(dir)`; with the CLI, repeat `--source-root`. Sentra listens on `127.0.0.1` only; use `127.0.0.1` (not `localhost`) in the DSN, because browsers may resolve `localhost` to `::1`.
+An embedding host can also add roots at runtime with `sentra.addSourceRoot(dir)`; with the CLI, repeat `--source-root`. Sentra listens on `127.0.0.1` by default; use `127.0.0.1` (not `localhost`) in the DSN, because browsers may resolve `localhost` to `::1`.
 
 ## What gets mapped
 
@@ -91,7 +91,7 @@ Code that Vite runs on the server during SSR (`<script setup>` of pages and comp
 
 Sentra cannot map these frames: the files on disk are the original sources and have no source map. It stores them with `positionReliable: false`, drops the SDK context lines (they were read from the wrong lines) and records the reason `ssr_position_unreliable`. The CLI marks such positions with `~`.
 
-To get correct SSR positions, add this dev-only Nitro plugin. It maps stack frames through the source maps of Nuxt's vite-node runner before any error is captured.
+To get correct SSR positions, add this dev-only Nitro plugin. It maps stack frames through the source maps of Nuxt's vite-node runner before any error is captured. It uses internal Nuxt APIs (`#internal/nuxt/vite-node-runner.mjs`, `runner.moduleCache`), which can change in any Nuxt release.
 
 `server/dev/ssr-stack-positions.ts` (not in `server/plugins/`, so it is only loaded through `$development` in `nuxt.config.ts` above):
 
@@ -157,6 +157,7 @@ Each error/message record has `data.sourceMaps` with `status` (`not_applicable`,
 | `no_source_map`                            | The file has no `sourceMappingURL` (often libraries in `node_modules`).                                              | Nothing to do for library frames.                                                               |
 | `invalid_source_map` / `no_mapping`        | The map is broken or has no entry for the position.                                                                  | Restart the dev server.                                                                         |
 | `map_outside_source_root`                  | The map file is missing or outside the source roots.                                                                 | Add the directory with `--source-root` (CLI) or `addSourceRoot` (embedding).                    |
+| `too_large` / `read_failed`                | The module or map is over the size limit, or the file could not be read.                                             | Check file size and permissions.                                                                |
 | `map_not_allowed` / `redirect_not_allowed` | The map or a redirect points to another host or port.                                                                | Not followed on purpose.                                                                        |
 | `ssr_position_unreliable`                  | SSR frame with generated positions (see above).                                                                      | Add the SSR plugin; positions are then correct, the flag stays.                                 |
 

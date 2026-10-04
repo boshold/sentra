@@ -131,6 +131,8 @@ jobs:
       - name: Stage on npm
         env:
           VERSION: ${{ needs.build.outputs.version }}
+          # npm refuses provenance for private repositories.
+          PROVENANCE: ${{ github.event.repository.private && 'false' || 'true' }}
         run: |
           set -euo pipefail
           npm_version=$(npm --version)
@@ -141,7 +143,7 @@ jobs:
             if [[ -n "$(npm view "$name@$VERSION" version 2>/dev/null || true)" ]]; then
               echo "$name@$VERSION is already on npm, skipping"
             else
-              npm stage publish "./release/$file" --access public --provenance
+              npm stage publish "./release/$file" --access public --provenance="$PROVENANCE"
             fi
           done < release/order.txt
           {

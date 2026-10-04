@@ -4,7 +4,9 @@ All notable changes to `@bosdev/sentra-core` and `@bosdev/sentra-cli`. Both pack
 
 ## Unreleased
 
-- Packages are published to npm as `@bosdev/sentra-core` and `@bosdev/sentra-cli`. Releases are staged with provenance and go live after maintainer approval. Version 0.1.0 shipped first to GitHub Packages under `@boshold`, then to npm under `@bosdev` without provenance.
+## 0.1.1 - 2026-10-04
+
+- Packages are published to npm as `@bosdev/sentra-core` and `@bosdev/sentra-cli`. Releases are staged and go live after maintainer approval. Provenance is added once the repository is public. Version 0.1.0 shipped first to GitHub Packages under `@boshold`, then to npm under `@bosdev` without provenance.
 - Core: new exports `DEFAULT_SOURCE_MAP_FETCH_TIMEOUT_MS` and `DEFAULT_SOURCE_MAP_BUDGET_MS`.
 - Core and MCP: the issue line separator between title and culprit is now `-` instead of an em dash.
 

@@ -49,9 +49,9 @@ Run `pnpm check` before opening a pull request.
 
 ## Releasing
 
-Maintainers run the Release workflow (Actions, Release) with a `bump` of `patch`, `minor` or `major`. It runs CI, writes the version into both packages, commits and tags `vX.Y.Z`, publishes both packages to npm with provenance and creates the GitHub release. `dry-run` builds without pushing or publishing. Do not push tags or edit versions by hand.
+Maintainers run the Release workflow (Actions, Release) with a `bump` of `patch`, `minor` or `major`. It runs CI, writes the version into both packages, commits and tags `vX.Y.Z`, stages both packages on npm with provenance and creates the GitHub release. `dry-run` builds without pushing or publishing. Do not push tags or edit versions by hand.
 
-Publishing runs in the `release` GitHub environment, which only allows `main`. `CHANGELOG.md` is maintained by hand: before a release, move the `Unreleased` entries under a heading for the new version. The GitHub release notes are generated from the merged pull requests.
+Staged versions are not installable until a maintainer approves them with 2FA on npmjs.com or with `npm stage approve` (core first, the CLI depends on it). The workflow cannot publish directly. Publishing runs in the `release` GitHub environment, which only allows `main`. `CHANGELOG.md` is maintained by hand: before a release, move the `Unreleased` entries under a heading for the new version. The GitHub release notes are generated from the merged pull requests.
 
 ## Reporting issues
 

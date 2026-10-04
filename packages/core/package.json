@@ -12,7 +12,7 @@
     "sentry-sdk",
     "sourcemaps"
   ],
-  "homepage": "https://github.com/boshold/sentra#readme",
+  "homepage": "https://github.com/boshold/sentra/tree/main/packages/core#readme",
   "bugs": {
     "url": "https://github.com/boshold/sentra/issues"
   },

@@ -61,11 +61,7 @@ The path segments before the trailing `1` set the scope of every record, so you 
 | `http://sentra@127.0.0.1:8969/my-app/3f9a1c/web/1` | `my-app`  | `3f9a1c`  | `web`     |
 | `http://sentra@127.0.0.1:8969/my-app/_/web/1`      | `my-app`  | `default` | `web`     |
 
-- A missing segment becomes `default`. `_` skips a middle segment.
-- Segments match `[A-Za-z0-9._-]{1,64}` and must not be `.` or `..`. Anything else is rejected with `400 invalid_scope`.
-- The public key (`sentra`) and the project id (`1`) are ignored, but the SDK still checks them: the key must match `\w+` and the id must be digits.
-- `sentra dsn --project my-app --service web` prints `http://sentra@127.0.0.1:8969/my-app/_/web/1`.
-- With the SDK `tunnel` option the request URL has no scope segments. Sentra then reads the scope from the `dsn` in the envelope header.
+A missing segment or `_` becomes `default`. `sentra dsn --project my-app --service web` prints a scoped DSN. Segment rules, the `tunnel` option and DSN helpers: [CLI README](packages/cli/README.md#quick-start), [core README](packages/core/README.md#dsn-helpers).
 
 ## What gets stored
 
@@ -104,7 +100,7 @@ Sentra binds `127.0.0.1` by default. Ingest has no authentication and open CORS,
 
 - Node `>=22.15`. The core also runs on Bun `>=1.4`.
 - Sentry JavaScript SDK v11 is tested in CI (`@sentry/node`, `@sentry/browser`). v8 to v10 and SDKs for other languages use the same protocol and should work, but are not tested.
-- Linux and macOS. Windows is not tested.
+- CI runs on Linux. macOS should work but is not tested in CI. Windows is not tested.
 
 ## Contributing
 

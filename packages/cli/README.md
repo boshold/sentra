@@ -28,7 +28,15 @@ Requires Node `>=22.15`. `better-sqlite3` is installed with the package as an op
 
 ## Quick start
 
-Start the server. It prints where it listens and which DSN to use:
+Start the server:
+
+```bash
+pnpx @bosdev/sentra-cli
+# or, when installed globally
+sentra
+```
+
+It prints where it listens and which DSN to use:
 
 ```text
 sentra 0.1.0  listening on http://127.0.0.1:8969
@@ -51,7 +59,7 @@ To keep apps and services apart, add scope segments to the DSN:
 http://sentra@<host>:<port>/[project/][session/][service/]1
 ```
 
-A missing segment becomes `default`, `_` skips a middle segment. Segments match `[A-Za-z0-9._-]{1,64}` and must not be `.` or `..`. The public key (`sentra`) and the project id (`1`) are ignored, but the SDK still checks them: the key must match `\w+` and the id must be digits.
+A missing segment becomes `default`. `_` also means `default`, so you can skip a middle segment (`my-app/_/web`). Segments match `[A-Za-z0-9._-]{1,64}` and must not be `.` or `..`. The public key (`sentra`) and the project id (`1`) are ignored, but the SDK still checks them: the key must match `\w+` and the id must be digits. With the SDK `tunnel` option the request URL has no scope segments; Sentra then reads the scope from the `dsn` in the envelope header.
 
 ## Recipes
 
@@ -62,11 +70,7 @@ sentra dsn --project my-app --service web
 # http://sentra@127.0.0.1:8969/my-app/_/web/1
 ```
 
-Read errors from Claude Code (or any MCP client):
-
-```bash
-claude mcp add --transport http sentra http://127.0.0.1:8969/mcp
-```
+Read errors from Claude Code or another MCP client: see [MCP](#mcp).
 
 List the issues of the last hour:
 
@@ -123,7 +127,7 @@ Durations: `<number><ms|s|m|h|d|w>`, e.g. `12h`, `30d`. Sizes: `<number>[b|kb|mb
 | `--noise-retention` | duration \| `never`                  | `7d`                              | Max age of span, transaction, log and other records                |
 | `--max-body`        | size                                 | `20mb`                            | Max envelope size                                                  |
 | `--max-attachment`  | size                                 | `10mb`                            | Max stored attachment size; larger ones are recorded without bytes |
-| `--no-raw`          | flag                                 | off                               | Do not keep raw envelope bodies                                    |
+| `--no-raw`          | flag                                 | off                               | Do not keep raw envelope bodies (failed envelopes keep theirs)     |
 
 ### Source maps
 
@@ -185,7 +189,7 @@ Each record that passes the filters is printed as it arrives:
   issue f0f8eb9f NEW · 1× · env production · release r1
 16:40:15 TXN   my-app/3f9a1c/web  GET /api/users  42ms  ok
 16:40:15 WARN  my-app/3f9a1c/web  disk almost full  {free: 512}
-16:40:15 BAD   my-app/3f9a1c/web  invalid envelope: envelope header is not valid JSON (envelope 01a10235-634d-7652-963f-b994557d1164)
+16:40:15 BAD   my-app/3f9a1c/web  invalid envelope: envelope header is not valid JSON: SyntaxError: Unexpected token 'x', "xx" is not valid JSON (envelope 01a10235-634d-7652-963f-b994557d1164)
 ```
 
 - Errors and messages show in-app frames, a count of collapsed library frames and the issue with its count (`NEW` on first sight). Positions marked with `~` come from SSR frames whose position is not reliable.
@@ -198,7 +202,7 @@ Each record that passes the filters is printed as it arrives:
 
 ## Query API
 
-JSON API under `/api/sentra`. Array parameters can be repeated or comma separated (`kind=error,message`). Unknown or repeated scalar parameters return `400 invalid_filter`. Lists are paginated with `limit` (default 50, between 1 and 500) and `cursor` (`nextCursor` of the previous page).
+JSON API under `/api/sentra`. Array parameters can be repeated or comma separated (`kind=error,message`). Unknown or repeated scalar parameters return `400 invalid_filter`. Lists are paginated with `limit` (default 50; values outside 1 to 500 are clamped) and `cursor` (`nextCursor` of the previous page).
 
 | Route                                 | Parameters                                                                                                                                                                         | Response                                           | Errors                                      |
 | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------- |
@@ -244,7 +248,7 @@ curl -N "http://127.0.0.1:8969/api/sentra/stream?project=my-app&kind=error"
 
 ## MCP
 
-`POST /mcp` serves MCP over streamable HTTP (stateless). `GET` and `DELETE` return `405`. A rejected `Host` or `Origin` returns `403` with a JSON-RPC error body.
+`POST /mcp` serves MCP over streamable HTTP (stateless). Every other method returns `405`. A rejected `Host` or `Origin` returns `403` with a JSON-RPC error body.
 
 ```bash
 claude mcp add --transport http sentra http://127.0.0.1:8969/mcp

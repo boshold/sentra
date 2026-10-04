@@ -8,7 +8,7 @@ Apps keep the official Sentry SDKs and only get a Sentra DSN:
 http://sentra@<host>:<port>/[project/][session/][service/]1
 ```
 
-A missing segment becomes `default`, `_` skips a middle segment, segments match `[A-Za-z0-9._-]{1,64}` and must not be `.` or `..`. The public key (`sentra`) and the project id (`1`) are ignored, but the SDK still checks them: the key must match `\w+` and the id must be digits.
+A missing segment becomes `default`, and `_` also means `default` (to skip a middle segment). Segments match `[A-Za-z0-9._-]{1,64}` and must not be `.` or `..`. The public key (`sentra`) and the project id (`1`) are ignored, but the SDK still checks them: the key must match `\w+` and the id must be digits.
 
 For a ready-made server with terminal output, HTTP API and MCP endpoint, use [`@bosdev/sentra-cli`](https://github.com/boshold/sentra/tree/main/packages/cli).
 
@@ -65,7 +65,7 @@ On shutdown call `unsubscribe()` and `await sentra.close()`. To expose the data 
 
 A host with its own router can use `isIngestPath(pathname)` to decide which requests go to `sentra.handle`. `toNodeListener` answers `400 invalid_scope` when the raw request path has a `.` or `..` segment (also `%2e`), because URL parsing would move the event to another scope; a host that builds the `Request` itself should do the same.
 
-`sentra.handle(request: Request): Promise<Response>` is bound and never rejects. Errors use the body `{ error: { code, message, details? } }` and repeat the message in `X-Sentry-Error`. It never answers `429`, because SDK v11 stops sending for 60 s after one.
+`sentra.handle(request: Request): Promise<Response>` is bound and never rejects. Errors use the body `{ error: { code, message } }` and repeat the message in `X-Sentry-Error`. It never answers `429`, because SDK v11 stops sending for 60 s after one.
 
 | Status | Code                    | When                                                          |
 | ------ | ----------------------- | ------------------------------------------------------------- |
@@ -96,7 +96,7 @@ A host with its own router can use `isIngestPath(pathname)` to decide which requ
 | `retention.noiseMaxAge`     | `"7d"` (`DEFAULT_NOISE_MAX_AGE`)               | Delete `span`, `transaction`, `log`, `other` records older than this; duration or `"never"`                                                                    |
 | `limits.maxEnvelopeBytes`   | 20 MiB (`DEFAULT_MAX_ENVELOPE_BYTES`)          | Max envelope size, before and after decompression                                                                                                              |
 | `limits.maxAttachmentBytes` | 10 MiB (`DEFAULT_MAX_ATTACHMENT_BYTES`)        | Larger attachments are recorded without their bytes                                                                                                            |
-| `rawEnvelopes`              | `true`                                         | Keep raw envelope bodies                                                                                                                                       |
+| `rawEnvelopes`              | `true`                                         | Keep raw envelope bodies. Envelopes that fail to parse always keep theirs                                                                                      |
 | `sourceMaps.enabled`        | `true`                                         | Map stack frames at ingest                                                                                                                                     |
 | `sourceMaps.allowedHosts`   | `[]`                                           | Hosts (`host`, `host:port`, IPv6) allowed for HTTP fetches and in-app frames, added to loopback. The port is ignored: `host:port` allows that host on any port |
 | `sourceMaps.sourceRoots`    | `[]`                                           | Absolute directories the FS loader may read                                                                                                                    |
@@ -117,7 +117,7 @@ The `StorageAdapter` interface and its types are exported for custom adapters.
 
 ## Bun-compiled hosts
 
-On Bun, `auto` uses only `node:sqlite` (built into Bun `>=1.4`) and never loads `better-sqlite3`: Bun aborts the whole process when it loads that native addon (seen on 1.4.0), and the abort cannot be caught. `driver: "better-sqlite3"` still forces it. Hosts compiled with `bun build --compile` can pass `--external better-sqlite3` to keep the unused package out of the binary.
+On Bun, `auto` uses only `node:sqlite` (built into Bun `>=1.4`) and never loads `better-sqlite3`: Bun aborts the whole process when it loads that native addon (seen on 1.4.x), and the abort cannot be caught. `driver: "better-sqlite3"` still forces it. Hosts compiled with `bun build --compile` can pass `--external better-sqlite3` to keep the unused package out of the binary.
 
 ## DSN helpers
 
@@ -161,17 +161,16 @@ Filter fields:
 - Items: `kind`, `itemType`, `level`, `minLevel`, `environment`, `release`, `eventId`, `issueId`, `traceId`, `q` (case-insensitive substring of the title).
 - Issues: `kind` (`"error"` or `"message"`), `level`, `minLevel`, `q`.
 
-Pagination: `page = { limit, cursor }`, `limit` defaults to 50 and is kept between 1 and 500. Pass `nextCursor` from the previous page as `cursor`; it is `null` on the last page. Invalid filters throw `SentraValidationError` (`invalid_filter`, `invalid_cursor`). The zod schemas are exported (`itemFilterSchema`, `issueFilterSchema`, `scopeFilterSchema`, `liveFilterSchema`, `pageInputSchema`, ...).
+Pagination: `page = { limit, cursor }`, `limit` defaults to 50; values outside 1 to 500 are clamped. Pass `nextCursor` from the previous page as `cursor`; it is `null` on the last page. Invalid filters throw `SentraValidationError` (`invalid_filter`, `invalid_cursor`). The zod schemas are exported (`itemFilterSchema`, `issueFilterSchema`, `scopeFilterSchema`, `liveFilterSchema`, `pageInputSchema`, ...).
 
 ```ts
-const page = await sentra.query.listItems(
-  { project: "my-app", kind: ["error", "message"], since: "24h" },
-  { limit: 20 },
-);
+const filter: ItemFilter = { project: "my-app", kind: ["error", "message"], since: "24h" };
+const page = await sentra.query.listItems(filter, { limit: 20 });
+// Reuse the same filter with the cursor.
 const next =
   page.nextCursor === null
     ? null
-    : await sentra.query.listItems({ project: "my-app" }, { cursor: page.nextCursor });
+    : await sentra.query.listItems(filter, { limit: 20, cursor: page.nextCursor });
 ```
 
 ## Live updates

@@ -1,6 +1,6 @@
 {
   "name": "@bosdev/sentra-core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Local Sentry-compatible event receiver: ingest handler, parser, issues, source maps, storage, query and live subscribe.",
   "keywords": [
     "dev-tools",

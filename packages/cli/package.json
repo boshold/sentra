@@ -1,6 +1,6 @@
 {
   "name": "@bosdev/sentra-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Standalone local Sentry-compatible event receiver with live terminal output, HTTP query API and MCP endpoint.",
   "keywords": [
     "cli",

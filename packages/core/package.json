@@ -54,10 +54,10 @@
   },
   "devDependencies": {
     "@jridgewell/sourcemap-codec": "^1.6.0",
-    "@modelcontextprotocol/client": "^2.2.0",
-    "@modelcontextprotocol/sdk": "^1.31.0",
+    "@modelcontextprotocol/client": "^2.3.1",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@modelcontextprotocol/server": "^2.2.0",
-    "@sentry/core": "^11.2.0",
+    "@sentry/core": "^11.7.0",
     "@types/better-sqlite3": "^9.6.0"
   },
   "optionalDependencies": {
